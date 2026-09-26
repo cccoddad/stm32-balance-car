@@ -46,11 +46,20 @@
 #define configTICK_RATE_HZ ((TickType_t)1000)
 #define configMAX_PRIORITIES (32)
 #define configMINIMAL_STACK_SIZE ((unsigned short)128)
-#define configTOTAL_HEAP_SIZE ((size_t)(15 * 1024)) // оƬ���SRAM20��Ԥ��һ��
+#define configTOTAL_HEAP_SIZE ((size_t)(15 * 1024)) // 芯片最大SRAM20，预留一点
 #define configMAX_TASK_NAME_LEN (16)
 #define configUSE_TRACE_FACILITY 0
 #define configUSE_16_BIT_TICKS 0
 #define configIDLE_SHOULD_YIELD 1
+
+/* 栈溢出检测方法 2：任务切换时比对栈顶保存的模式字节与任务 TCB 中记录的
+ * 最后入栈值，比方法 1（只检查栈尾哨兵字节）更可靠。检测到溢出会调用
+ * vApplicationStackOverflowHook()，实现在 App/App_Task.c。
+ *
+ * 本工程 RAM 仅 20KB，FreeRTOS 堆占 15KB，各任务栈都分配在堆里，一旦栈
+ * 溢出会直接踩坏相邻堆块（属于"看起来能跑、随机死机"的典型问题），
+ * 因此必须开启检测。 */
+#define configCHECK_FOR_STACK_OVERFLOW 2
 
 /* Set the following definitions to 1 to include the API function, or zero
 to exclude the API function. */
@@ -76,26 +85,26 @@ configKERNEL_INTERRUPT_PRIORITY setting.  Here 15 corresponds to the lowest
 NVIC value of 255. */
 #define configLIBRARY_KERNEL_INTERRUPT_PRIORITY 15
 
-/* ���ӱ���ĺ� */
+/* 添加必须的宏 */
 #define xPortPendSVHandler PendSV_Handler
 #define vPortSVCHandler SVC_Handler
 #define INCLUDE_xTaskGetSchedulerState 1
 
-/* ������̬���� */
+/* 开启动态分配 */
 #define configSUPPORT_DYNAMIC_ALLOCATION 1
 
-/* ����ʱ��Ƭ���� */
+/* 开启时间片调度 */
 #define configUSE_TIME_SLICING 1
 
-/* �ж�Ƕ����Ϊ���� */
+/* 中断嵌套行为配置 */
 #ifdef __NVIC_PRIO_BITS
 #define configPRIO_BITS __NVIC_PRIO_BITS
 #else
 #define configPRIO_BITS 4
 #endif
 
-#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY 15     /* �ж�������ȼ� */
-#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 5 /* FreeRTOS�ɹ���������ж����ȼ� */
+#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY 15     /* 中断最低优先级 */
+#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 5 /* FreeRTOS可管理的最高中断优先级 */
 #define configKERNEL_INTERRUPT_PRIORITY (configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 #define configMAX_API_CALL_INTERRUPT_PRIORITY configMAX_SYSCALL_INTERRUPT_PRIORITY
