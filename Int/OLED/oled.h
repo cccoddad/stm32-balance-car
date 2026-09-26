@@ -49,7 +49,7 @@ void OLED_ShowChar(uint8_t x,uint8_t y,uint8_t chr,uint8_t size1,uint8_t mode);
 /* 显示 6x8 字号字符。 */
 void OLED_ShowChar6x8(uint8_t x,uint8_t y,uint8_t chr,uint8_t mode);
 /* 显示 ASCII 字符串。 */
-void OLED_ShowString(uint8_t x,uint8_t y,uint8_t *chr,uint8_t size1,uint8_t mode);
+void OLED_ShowString(uint8_t x,uint8_t y,const char *chr,uint8_t size1,uint8_t mode);
 /* 显示无符号整数。 */
 void OLED_ShowNum(uint8_t x,uint8_t y,uint32_t num,uint8_t len,uint8_t size1,uint8_t mode);
 /* 显示单个汉字点阵。 */

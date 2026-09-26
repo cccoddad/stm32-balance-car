@@ -257,11 +257,11 @@ void OLED_ShowChar(uint8_t x, uint8_t y, uint8_t chr, uint8_t size1, uint8_t mod
  * size1: 字号。
  * mode: 0 反色显示，1 正常显示。
  */
-void OLED_ShowString(uint8_t x, uint8_t y, uint8_t *chr, uint8_t size1, uint8_t mode)
+void OLED_ShowString(uint8_t x, uint8_t y, const char *chr, uint8_t size1, uint8_t mode)
 {
     while ((*chr >= ' ') && (*chr <= '~')) // 遇到非可见 ASCII 字符时停止显示。
     {
-        OLED_ShowChar(x, y, *chr, size1, mode);
+        OLED_ShowChar(x, y, (uint8_t)*chr, size1, mode);
         if (size1 == 8)
             x += 6;
         else
