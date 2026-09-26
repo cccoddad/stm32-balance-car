@@ -1,4 +1,5 @@
 #include "Com_Filter.h"
+#include "Car_Config.h"
 
 /* 卡尔曼滤波参数：用于融合加速度计倾角和陀螺仪角速度。 */
 float K1 =0.02; 
@@ -6,7 +7,8 @@ float angle, angle_dot;
 float Q_angle=0.001;    // 角度过程噪声协方差，数值越大表示越不相信模型预测。
 float Q_gyro=0.003;     // 陀螺仪零偏过程噪声协方差，影响对陀螺仪漂移的修正速度。
 float R_angle=0.5;      // 加速度测量噪声协方差，数值越大表示越不相信加速度计角度。
-float dt=0.005;         // 滤波计算周期，单位为秒，需要和实际调用周期尽量一致。                 
+float dt=CAR_SAMPLE_PERIOD_S; // 滤波周期，由 Car_Config.h 统一定义，必须等于采样任务的实际周期。
+
 char  C_0 = 1;
 float Q_bias, Angle_err;
 float PCt_0, PCt_1, E;

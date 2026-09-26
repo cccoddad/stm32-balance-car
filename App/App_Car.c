@@ -1,4 +1,6 @@
 #include "App_Car.h"
+#include "Car_Config.h"
+#include <stdio.h>
 
 short gx, gy, gz;
 short ax, ay, az;
@@ -9,10 +11,12 @@ extern float angle; // 卡尔曼滤波后的最终倾角，定义在滤波模块
 
 int ea, eb;
 
-char bat_str[5];   // 电池电压显示缓存：2 位整数、1 个小数点、1 位小数和字符串结束符。
-char ea_str[7];    // A 编码器显示缓存：1 位符号、5 位数值和字符串结束符。
-char eb_str[7];    // B 编码器显示缓存：1 位符号、5 位数值和字符串结束符。
-char angle_str[7]; // 倾角显示缓存：1 位符号、3 位整数、1 个小数点、1 位小数和字符串结束符。
+/* 显示缓冲区统一留 8 字节：覆盖最坏格式化长度（含符号、小数位）再加结束符，
+ * 配合 snprintf 使用，杜绝 sprintf 无边界写入。 */
+char bat_str[8];   // 电池电压：如 "12.3"。
+char ea_str[8];    // A 编码器：如 "-32768"。
+char eb_str[8];    // B 编码器：如 "-32768"。
+char angle_str[8]; // 倾角：如 "-100.5"。
 
 /* 直立环 PID 参数：负责把车身拉回目标平衡角。 */
 float balance_kp = -720.0;  // 直立环比例系数，影响扶正力度；符号由电机安装方向和角度方向决定。
@@ -70,26 +74,54 @@ void App_Car_GetAngle(void)
 void App_Car_Display(void)
 {
     /* 1. 采集并显示电池电压。电阻分压后进入 ADC，因此需要乘以 4 还原实际电压。 */
-    double bat_vol = 0.0;
-    /* ADC 未使用连续转换模式，每次读取前手动启动一次转换。 */
-    HAL_ADC_Start(&hadc1);
-    bat_vol = (HAL_ADC_GetValue(&hadc1) * 3.3 / 4095) * 4;
+    float bat_vol = 0.0f;
+    /* ADC 为单次转换模式：启动后必须等待转换完成（PollForConversion）才能取值，
+     * 否则读到的是上一次的残留结果甚至 0。 */
+    if (HAL_ADC_Start(&hadc1) == HAL_OK)
+    {
+        if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+        {
+            bat_vol = ((float)HAL_ADC_GetValue(&hadc1) * 3.3f / 4095.0f) * 4.0f;
+        }
+    }
 
-    sprintf(bat_str, "%3.1f", bat_vol);
+    snprintf(bat_str, sizeof(bat_str), "%3.1f", bat_vol);
     OLED_ShowString(32, 0, bat_str, 16, 1);
 
     /* 2. 显示左右编码器增量，用于观察电机转速和方向是否一致。 */
-    sprintf(ea_str, "%6d", ea);
-    sprintf(eb_str, "%6d", eb);
+    snprintf(ea_str, sizeof(ea_str), "%6d", ea);
+    snprintf(eb_str, sizeof(eb_str), "%6d", eb);
     OLED_ShowString(24, 16, ea_str, 16, 1); // 前面已经显示“EA:”，所以从 x=3*8=24 的位置开始写数值。
     OLED_ShowString(24, 32, eb_str, 16, 1); // 前面已经显示“EB:”，第三行 y 坐标为 32。
 
     /* 3. 显示当前倾角，用来辅助调试直立环目标角和滤波效果。 */
-    sprintf(angle_str, "%5.1f", angle);
+    snprintf(angle_str, sizeof(angle_str), "%5.1f", angle);
     OLED_ShowString(48, 48, angle_str, 16, 1); // 前面已经显示“Angle:”，所以从 x=6*8=48 的位置开始写数值。
 
     /* 4. 将显存内容一次性刷新到 OLED 屏幕。 */
     OLED_Refresh();
+}
+
+/**
+ * @brief 把控制量限制在 PWM 允许范围内。
+ * @param value 三环叠加后的原始控制量。
+ * @return 限制到 [-CAR_PWM_LIMIT, CAR_PWM_LIMIT] 之后的值。
+ *
+ * 三环输出叠加后可能远超 TIM4 的计数范围（ARR=7199），必须统一限幅：
+ * 既防止写入比较寄存器的值超出硬件范围，也避免"饱和后反向迟滞"带来的
+ * 积分饱和现象（配合速度环的积分限幅一起工作）。
+ */
+static int App_Car_LimitPwm(int value)
+{
+    if (value > CAR_PWM_LIMIT)
+    {
+        return CAR_PWM_LIMIT;
+    }
+    if (value < -CAR_PWM_LIMIT)
+    {
+        return -CAR_PWM_LIMIT;
+    }
+    return value;
 }
 
 /**
@@ -142,18 +174,19 @@ void App_Car_PID(void)
         turn_out = Com_PID_Turn(turn_kp, gz);
     }
     /* 遥控按键持续按住会让差速不断累加，因此需要限幅保护。 */
-    if (remote_turn > 500)
+    if (remote_turn > CAR_REMOTE_TURN_LIMIT)
     {
-        remote_turn = 500;
+        remote_turn = CAR_REMOTE_TURN_LIMIT;
     }
-    else if (remote_turn < -500)
+    else if (remote_turn < -CAR_REMOTE_TURN_LIMIT)
     {
-        remote_turn = -500;
+        remote_turn = -CAR_REMOTE_TURN_LIMIT;
     }
 
-    /* 4. 叠加三环输出。turn_out 和 remote_turn 以相反符号分配给左右轮，形成差速。 */
-    pwma = balance_out + velocity_out + turn_out + remote_turn;
-    pwmb = balance_out + velocity_out - turn_out - remote_turn;
+    /* 4. 叠加三环输出。turn_out 和 remote_turn 以相反符号分配给左右轮，形成差速。
+     *    叠加结果统一限幅后再写入定时器，防止超出 PWM 硬件范围。 */
+    pwma = App_Car_LimitPwm(balance_out + velocity_out + turn_out + remote_turn);
+    pwmb = App_Car_LimitPwm(balance_out + velocity_out - turn_out - remote_turn);
     Int_TB6612_SetPWM(pwma, pwmb);
 }
 
@@ -165,6 +198,7 @@ void App_Car_PID(void)
  * 回调末尾重新开启中断接收，保证下一次字符仍能进入该回调。
  */
 extern uint8_t buff[1];
+/* cppcheck-suppress constParameterPointer -- 参数 const 与否由 HAL 回调原型决定，不可改 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART2)

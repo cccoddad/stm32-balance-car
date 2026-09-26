@@ -1,4 +1,5 @@
 #include "Com_PID.h"
+#include "Car_Config.h"
 
 /**
  * @brief 直立环 PD 控制。
@@ -50,14 +51,14 @@ int Com_PID_Velocity(float kp, float ki, int encoder_a, int encoder_b,int remove
     least_velocity -= remove_move;
 
     /* 4. 积分限幅。所有积分控制都要防止积分饱和，否则会导致小车恢复很慢甚至失控。 */
-    /*    编码器读数是带符号 16 位范围，这里把积分限制在较保守的 +/-10000。 */
-    if(least_velocity > 10000)
+    /*    编码器读数是带符号 16 位范围，限幅值统一定义在 Car_Config.h。 */
+    if(least_velocity > CAR_VELOCITY_I_LIMIT)
     {
-        least_velocity = 10000;
+        least_velocity = CAR_VELOCITY_I_LIMIT;
     }
-    else if(least_velocity < -10000)
+    else if(least_velocity < -CAR_VELOCITY_I_LIMIT)
     {
-        least_velocity = -10000;
+        least_velocity = -CAR_VELOCITY_I_LIMIT;
     }
 
     /* 5. 速度环 PI 输出。 */
