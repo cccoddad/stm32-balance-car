@@ -23,7 +23,7 @@
 /* USER CODE BEGIN 0 */
 int fputc(int ch, FILE *f)
 {
-    /* 发送一个字节数据到串口DEBUG_USART */
+    /* 鍙戦�佷竴涓瓧鑺傛暟鎹埌涓插彛DEBUG_USART */
     HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 1000);    
     
     return (ch);

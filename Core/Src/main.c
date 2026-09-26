@@ -102,29 +102,29 @@ int main(void)
     MX_USART2_UART_Init();
     /* USER CODE BEGIN 2 */
 
-    /* Æô¶¯TIM2¡¢TIM3µÄ±àÂëÆ÷Ä£Ê½ */
+    /* å¯åŠ¨TIM2ã€TIM3çš„ç¼–ç å™¨æ¨¡å¼ */
     HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_1);
     HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_2);
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_1);
     HAL_TIM_Encoder_Start(&htim3, TIM_CHANNEL_2);
-    /* Æô¶¯TIM4µÄpwmÄ£Ê½ */
+    /* å¯åŠ¨TIM4çš„pwmæ¨¡å¼ */
     HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
-    /* Æô¶¯´®¿Ú2½ÓÊÕÖÐ¶Ï */
+    /* å¯åŠ¨ä¸²å£2æŽ¥æ”¶ä¸­æ–­ */
     HAL_UART_Receive_IT(&huart2, buff, 1);
 
-    /* ³õÊ¼»¯MPU6050 */
+    /* åˆå§‹åŒ–MPU6050 */
     Int_MPU6050_Init();
 
-    /* ³õÊ¼»¯OLED */
+    /* åˆå§‹åŒ–OLED */
     OLED_Init();
     OLED_Clear();
     /*
-        µÚÒ»¸ö²ÎÊý£ºx×ø±ê£¬Ë®Æ½·½Ïò
-        µÚ¶þ¸ö²ÎÊý£ºy×ø±ê£¬´¹Ö±·½Ïò
-        µÚÈý¸ö²ÎÊý£ºÒªÏÔÊ¾µÄ×Ö·û´®
-        µÚËÄ¸ö²ÎÊý£º×ÖÌå¸ß¶È£¨×Ö¿âÖ§³Ö£©
-        µÚÎå¸ö²ÎÊý£ºÏÔÊ¾Ä£Ê½£¬0·´ÏÔ£¨°×µ×ºÚ×Ó£©£¬1ÕýÏÔ£¨ºÚµ×°××Ö£©
+        ç¬¬ä¸€ä¸ªå‚æ•°ï¼šxåæ ‡ï¼Œæ°´å¹³æ–¹å‘
+        ç¬¬äºŒä¸ªå‚æ•°ï¼šyåæ ‡ï¼Œåž‚ç›´æ–¹å‘
+        ç¬¬ä¸‰ä¸ªå‚æ•°ï¼šè¦æ˜¾ç¤ºçš„å­—ç¬¦ä¸²
+        ç¬¬å››ä¸ªå‚æ•°ï¼šå­—ä½“é«˜åº¦ï¼ˆå­—åº“æ”¯æŒï¼‰
+        ç¬¬äº”ä¸ªå‚æ•°ï¼šæ˜¾ç¤ºæ¨¡å¼ï¼Œ0åæ˜¾ï¼ˆç™½åº•é»‘å­ï¼‰ï¼Œ1æ­£æ˜¾ï¼ˆé»‘åº•ç™½å­—ï¼‰
      */
     // OLED_ShowString(0,10,"atguigu",16,1);
     OLED_ShowString(0, 0, "BAT:       V", 16, 1);
@@ -133,7 +133,7 @@ int main(void)
     OLED_ShowString(0, 48, "Angle:", 16, 1);
     OLED_Refresh();
 
-    /* Æô¶¯FreeRTOS */
+    /* å¯åŠ¨FreeRTOS */
     App_Task_Init();
 
     /* USER CODE END 2 */
