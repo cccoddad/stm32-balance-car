@@ -1,0 +1,51 @@
+# ===== Keil MDK 构建产物 =====
+MDK-ARM/CAR_HAL/
+MDK-ARM/*.uvguix.*
+MDK-ARM/*.lst
+MDK-ARM/*.build_log.htm
+MDK-ARM/*.bak
+MDK-ARM/JLinkLog.txt
+MDK-ARM/*.jlink
+
+# ===== 通用构建/编译产物 =====
+*.o
+*.d
+*.crf
+*.axf
+*.hex
+*.bin
+*.map
+*.lnp
+*.dep
+*.iex
+*.lst
+*.htm
+*.exe
+*.elf
+build/
+cmake-build-*/
+out/
+
+# ===== IDE / 编辑器 =====
+.vscode/
+.idea/
+*.uvguix.*
+*.suo
+*.user
+
+# ===== Host 仿真 / 测试产物（Phase 2 起）=====
+Host/build/
+**/__pycache__/
+*.pyc
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+# ===== 数据与临时文件 =====
+*.csv
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db

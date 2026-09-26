@@ -1,0 +1,16 @@
+# 统一换行符，避免 Windows/Keil 与 CI 混用导致的 diff 噪音
+* text=auto
+
+*.c   text eol=lf
+*.h   text eol=lf
+*.py  text eol=lf
+*.md  text eol=lf
+*.yml text eol=lf
+*.s   text eol=crlf
+
+*.pdf   binary
+*.zip   binary
+*.hex   binary
+*.axf   binary
+*.png   binary
+*.jpg   binary
