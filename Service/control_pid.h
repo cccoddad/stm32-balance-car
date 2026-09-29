@@ -1,5 +1,5 @@
-#ifndef __COM_PID_H
-#define __COM_PID_H
+#ifndef __CONTROL_PID_H
+#define __CONTROL_PID_H
 
 /* 直立环 PD：根据倾角误差和 Y 轴角速度输出扶正 PWM 分量。 */
 int Com_PID_Balance(float kp, float kd, float kalman_angle, float balance_angle, short gy);

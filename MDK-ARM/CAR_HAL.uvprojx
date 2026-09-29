@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F103xB</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../Int;../Int/OLED;../Com;../App;../Mid/FreeRTOS;../Mid/FreeRTOS/include;../Mid/FreeRTOS/Portable</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../BSP;../BSP/oled;../Service;../App;../Mid/FreeRTOS;../Mid/FreeRTOS/include;../Mid/FreeRTOS/Portable</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -551,42 +551,42 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>Int</GroupName>
+          <GroupName>BSP</GroupName>
           <Files>
             <File>
-              <FileName>Int_Encoder.c</FileName>
+              <FileName>bsp_encoder.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Int\Int_Encoder.c</FilePath>
+              <FilePath>..\BSP\bsp_encoder.c</FilePath>
             </File>
             <File>
-              <FileName>Int_MPU6050.c</FileName>
+              <FileName>bsp_imu.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Int\Int_MPU6050.c</FilePath>
+              <FilePath>..\BSP\bsp_imu.c</FilePath>
             </File>
             <File>
-              <FileName>Int_TB6612.c</FileName>
+              <FileName>bsp_motor.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Int\Int_TB6612.c</FilePath>
+              <FilePath>..\BSP\bsp_motor.c</FilePath>
             </File>
             <File>
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Int\OLED\oled.c</FilePath>
+              <FilePath>..\BSP\oled\oled.c</FilePath>
             </File>
           </Files>
         </Group>
         <Group>
-          <GroupName>Com</GroupName>
+          <GroupName>Service</GroupName>
           <Files>
             <File>
-              <FileName>Com_Filter.c</FileName>
+              <FileName>attitude_kalman.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Com\Com_Filter.c</FilePath>
+              <FilePath>..\Service\attitude_kalman.c</FilePath>
             </File>
             <File>
-              <FileName>Com_PID.c</FileName>
+              <FileName>control_pid.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Com\Com_PID.c</FilePath>
+              <FilePath>..\Service\control_pid.c</FilePath>
             </File>
           </Files>
         </Group>

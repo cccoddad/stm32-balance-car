@@ -1,5 +1,5 @@
-#ifndef __INT_MPU6050_H
-#define __INT_MPU6050_H
+#ifndef __BSP_IMU_H
+#define __BSP_IMU_H
 
 #include "i2c.h"
 

@@ -1,5 +1,5 @@
-#ifndef __INT_TB6612_H
-#define __INT_TB6612_H
+#ifndef __BSP_MOTOR_H
+#define __BSP_MOTOR_H
 
 #include "tim.h"
 

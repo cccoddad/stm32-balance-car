@@ -28,7 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "App_Task.h"
-#include "Int_MPU6050.h"
+#include "bsp_imu.h"
 #include "oled.h"
 /* USER CODE END Includes */
 
