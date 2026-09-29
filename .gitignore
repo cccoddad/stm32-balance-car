@@ -35,6 +35,7 @@ out/
 
 # ===== Host 仿真 / 测试产物（Phase 2 起）=====
 Host/build/
+Host/build-*/
 **/__pycache__/
 *.pyc
 coverage/
