@@ -569,9 +569,19 @@
               <FilePath>..\BSP\bsp_imu.c</FilePath>
             </File>
             <File>
+              <FileName>bsp_imu_reg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\bsp_imu_reg.c</FilePath>
+            </File>
+            <File>
               <FileName>bsp_motor.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\bsp_motor.c</FilePath>
+            </File>
+            <File>
+              <FileName>bsp_motor_reg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\bsp_motor_reg.c</FilePath>
             </File>
             <File>
               <FileName>bsp_uart.c</FileName>

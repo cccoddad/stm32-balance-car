@@ -1,4 +1,8 @@
 #include "bsp_imu.h"
+#include "bsp_switch.h"
+
+/* HAL 版实现：寄存器版（bsp_imu_reg.c）见 bsp_switch.h，两者互斥编译。 */
+#if !BSP_USE_REG
 
 /**
  * @brief 从 MPU6050 指定寄存器读取 1 个字节。
@@ -205,3 +209,5 @@ void BSP_IMU_ReadAccel(short *ax, short *ay, short *az)
     *ay = ((short)buff[2] << 8) | buff[3];
     *az = ((short)buff[4] << 8) | buff[5];
 }
+
+#endif /* !BSP_USE_REG */

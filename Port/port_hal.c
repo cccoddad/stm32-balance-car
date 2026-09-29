@@ -46,6 +46,11 @@ void port_encoder_read(int32_t *ea, int32_t *eb)
 
 /* ======== 电机 ======== */
 
+void port_motor_init(void)
+{
+    BSP_Motor_Init();
+}
+
 void port_motor_set(int16_t pwm_a, int16_t pwm_b)
 {
     BSP_Motor_SetPWM(pwm_a, pwm_b);

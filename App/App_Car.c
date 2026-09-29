@@ -47,6 +47,7 @@ void App_Car_Init(void)
     Proto_Init(&s_parser);
 
     port_imu_init();
+    port_motor_init();
     port_uart_init();
     port_uart_set_rx_cb(App_Car_OnRxByte);
 }
