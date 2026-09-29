@@ -25,6 +25,9 @@ cppcheck --enable=warning,style,performance,portability --inline-suppr \
 cppcheck --enable=warning --inline-suppr --suppress=missingIncludeSystem --std=c99 \
     ../BSP/bsp_adc.c ../BSP/bsp_encoder.c ../BSP/bsp_imu.c ../BSP/bsp_motor.c \
     ../BSP/bsp_uart.c -q
+# 寄存器版互斥编译：单独展开 BSP_USE_REG=1 检查其内容
+cppcheck --enable=warning --inline-suppr --suppress=missingIncludeSystem --std=c99 \
+    -DBSP_USE_REG=1 ../BSP/bsp_imu_reg.c ../BSP/bsp_motor_reg.c -q
 echo "   0 告警"
 
 echo "== [2/4] 准备 ASCII junction =="

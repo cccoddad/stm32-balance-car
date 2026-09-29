@@ -174,6 +174,11 @@ void port_encoder_read(int32_t *ea, int32_t *eb)
     *eb = -counts;
 }
 
+void port_motor_init(void)
+{
+    /* 仿真世界无外设初始化。 */
+}
+
 void port_motor_set(int16_t pwm_a, int16_t pwm_b)
 {
     s_last_pwm_a = pwm_a;

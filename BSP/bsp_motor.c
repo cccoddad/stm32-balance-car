@@ -1,4 +1,18 @@
 #include "bsp_motor.h"
+#include "bsp_switch.h"
+
+/* HAL 版实现：寄存器版（bsp_motor_reg.c）见 bsp_switch.h，两者互斥编译。 */
+#if !BSP_USE_REG
+
+/**
+ * @brief HAL 版电机初始化（空实现）。
+ * CubeMX 的 MX_TIM4_Init + main 中的 PWM_Start 已完成等价配置，
+ * 保持与寄存器版相同的对外入口，App 层无需感知差异。
+ */
+void BSP_Motor_Init(void)
+{
+}
+
 
 
 
@@ -126,3 +140,5 @@ void BSP_Motor_SetPWM(int pwma,int pwmb)
 
 
 
+
+#endif /* !BSP_USE_REG */

@@ -22,6 +22,10 @@
 #define BIN2_H HAL_GPIO_WritePin(BIN2_GPIO_Port,BIN2_Pin,GPIO_PIN_SET)   // B 电机方向引脚 BIN2 输出高电平。
 
 
+/* 电机定时器/方向引脚初始化。HAL 版为空（main 中 CubeMX 已完成），
+ * 寄存器版直接配置 RCC/TIM4/GPIO。由 port_motor_init 统一调用。 */
+void BSP_Motor_Init(void);
+
 /* 根据 PID 输出的带符号 PWM，设置左右电机方向与占空比。 */
 void BSP_Motor_SetPWM(int pwma, int pwmb);
 
