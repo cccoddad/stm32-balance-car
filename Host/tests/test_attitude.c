@@ -2,7 +2,7 @@
  * @file test_attitude.c
  * @brief Service/attitude_kalman.c 单元测试：卡尔曼滤波收敛性与鲁棒性。
  *
- * 覆盖升级方案 Phase 2 规定的用例：
+ * 覆盖用例：
  * - 恒定输入收敛（加速度角度阶跃 → 融合角收敛到真值）
  * - 纯陀螺漂移/零偏被 Q_bias 估计修正（长时间不发散）
  * - dt 变化不发散、极端输入不产生 NaN/Inf

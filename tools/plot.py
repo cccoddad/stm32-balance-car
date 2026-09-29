@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SIL 仿真实验出图脚本（方案 Phase 3 交付物之一）。
+SIL 仿真实验出图脚本。
 
 用法：
     python tools/plot.py [csv_dir] [out_dir]

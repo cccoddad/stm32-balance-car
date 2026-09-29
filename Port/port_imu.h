@@ -7,7 +7,7 @@
  *
  * 签名只使用标准 C 类型，不出现任何 HAL/BSP 类型：
  * - 实机实现 port_hal.c 转发到 BSP/bsp_imu.c；
- * - 主机仿真实现 port_sim.c（Phase 3）用倒立摆模型生成数据。
+ * - 主机仿真实现 port_sim.c 用倒立摆模型生成数据。
  * Service/App 只认本头文件，这就是"同一份算法双端编译"的解耦点。
  */
 

@@ -50,7 +50,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* 接收缓冲已收进 bsp_uart.c（P1：HAL 回调与缓冲不再散落在 main/App）。 */
+/* 接收缓冲已收进 bsp_uart.c（HAL 回调与缓冲不再散落在 main/App）。 */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/

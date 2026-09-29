@@ -5,7 +5,7 @@
  * @file App_Car.h
  * @brief 平衡车应用编排层接口。
  *
- * P1 重构后的依赖关系：App 只依赖 Service（纯算法）+ Port（硬件抽象）+
+ * 重构后的依赖关系：App 只依赖 Service（纯算法）+ Port（硬件抽象）+
  * Car_Config（纯宏配置），不再直接包含任何厂商驱动头文件——
  * 验收标准：对 App/ 与 Service/ 做字符串扫描，无任何 HAL 前缀接口调用。
  */
