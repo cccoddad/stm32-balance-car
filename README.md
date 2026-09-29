@@ -82,9 +82,20 @@ PID 任务内置**周期统计**（相邻两次唤醒间隔 min/max，10s 打印
 | `@MV,x#` | 前后：U/D/S | `@MV,U#` 前进 |
 | `@TR,x#` | 转向：L/R/S | `@TR,L#` 左转 |
 | `@PID,NAME,val#` | 在线调参 | `@PID,BKP,-700.0#` |
+| `@ST#` | 状态输出（延迟到任务上下文打印） | 角度/电压/周期/栈水位/参数/CPU |
 | 裸字符 `U/D/L/R/S` | 兼容课程蓝牙助手 | `U` |
 
 健壮性：半包/二进制垃圾/超长帧/字段截断一律丢帧自愈，经 10 万字节模糊测试。
+
+## 5.1 安全与可观测性机制
+
+| 机制 | 实现要点 | 验证 |
+|---|---|---|
+| 倾角保护 | **锁存式**：越 45° 切断并清控制状态；"接近直立 + 车身静止"持续 0.5s 才解锁。不能用电平式——翻滚时加速度角 `atan2` 回绕会让融合角在阈值附近抖动反复启停（SIL E6 首版实测到的失效） | SIL **E6** |
+| 欠压降功率 | 9.6V 进入 / 10.2V 退出（迟滞），PWM 限幅减半，ADC 归控制任务独占 | SIL **E7**（9.0V → max\|pwm\|=3599） |
+| 独立看门狗 | IWDG 约 2.56s 超时，控制任务每周期喂狗；卡死即硬件复位 | 编译验证（需实机） |
+| 参数并发保护 | 中断侧解析 → 待写槽位 → 控制任务临界区消费（mutex 不能进中断，这是选临界区的原因） | 编译验证 + 单测 |
+| 栈水位 / CPU 占用 | `uxTaskGetStackHighWaterMark` + DWT 周期计数驱动的 FreeRTOS 运行时统计，`@ST#` 一键输出 | 编译验证（需实机看数据） |
 
 ## 6. 验证体系（无硬件的完整证据链）
 
@@ -92,9 +103,9 @@ PID 任务内置**周期统计**（相邻两次唤醒间隔 min/max，10s 打印
 |---|---|---|---|
 | 编译 | Keil MDK 全量重编译 | **0 Error / 0 Warning** | `MDK-ARM/CAR_HAL.uvprojx` |
 | 静态 | cppcheck（App/Service/Port/BSP/Host） | 0 告警 | `Host/run_checks.sh` |
-| 单元测试 | CMake + gcc `-Werror` + CTest，111 断言 | 3/3 全绿 | `Host/tests/` |
+| 单元测试 | CMake + gcc `-Werror` + CTest，114 断言 | 3/3 全绿 | `Host/tests/` |
 | 覆盖率 | gcov（`Service/` 行覆盖） | **98.54%**（attitude 100% / control 100% / protocol 97.7%） | `CAR_COVERAGE=ON sh run_checks.sh` |
-| 闭环 | **固件在环 SIL**：倒立摆模型 + 同一份 App/Service 源码 | E1/E2 验收进 CTest | `Host/sim/` |
+| 闭环 | **固件在环 SIL**：倒立摆模型 + 同一份 App/Service 源码 | **7/7**（E1/E2/E6/E7 进 CTest 门禁） | `Host/sim/` |
 
 ### SIL 实验结果（`Host/sim/main_sil.c --check`，图见 [docs/sil/](docs/sil/)）
 
@@ -105,6 +116,8 @@ PID 任务内置**周期统计**（相邻两次唤醒间隔 min/max，10s 打印
 | E3 | 台架 30s：卡尔曼 vs 互补 vs 纯积分 | RMS **0.091° / 1.877° / 30.0°** | ✅ 卡尔曼最优 |
 | E4 | `balance_kp` 扫描 -400~-1040 | -400 发散；超调 1.96°→5.59° 单调上升 | ✅ 趋势成立 |
 | E5 | 控制周期抖动 0/1/2/5/10ms | 收敛 1.16→3.58s、RMS 0.070→0.207 单调劣化 | ✅ 周期确定性有价值 |
+| E6 | 60° 倒地：倾角锁存保护 | 0.5s 后 PWM 恒 0（翻滚中不解锁） | ✅ 进 CTest |
+| E7 | 9.0V 欠压 | 全程 max\|pwm\|=3599（半量程），电压读数正确 | ✅ 进 CTest |
 
 ![E1](docs/sil/e1_recovery.png)
 ![E3](docs/sil/e3_filters.png)
@@ -123,7 +136,7 @@ cd Host
 sh run_checks.sh                  # Windows: Git Bash / WSL
 CAR_COVERAGE=ON sh run_checks.sh  # 附带 gcov 覆盖率报告
 
-# 单独跑仿真 / 出图
+# 单独跑仿真 / 出图（E1~E7 共 7 组实验）
 ./build/sil_sim all build/sim_out --check
 python ../tools/plot.py build/sim_out ../docs/sil
 

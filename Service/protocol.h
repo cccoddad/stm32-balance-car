@@ -12,6 +12,7 @@
  *   @MV,U#        遥控前后：U 前进 / D 后退 / S 停止
  *   @TR,L#        遥控转向：L 左 / R 右 / S 停止
  *   @PID,BKP,-720.0#   在线调参：参数名 + 数值
+ *   @ST#          状态查询：角度/电压/周期统计/栈水位/参数快照
  *
  * 参数名约定：BKP 直立 kp、BKD 直立 kd、BANG 目标平衡角、
  *             VKP 速度 kp、VKI 速度 ki、TKP 转向 kp
@@ -32,7 +33,8 @@ typedef enum {
     PROTO_NONE = 0, /* 未构成完整有效指令 */
     PROTO_MOVE,     /* 遥控前后：arg1[0] 为 U/D/S */
     PROTO_TURN,     /* 遥控转向：arg1[0] 为 L/R/S */
-    PROTO_PID       /* 在线调参：arg1 参数名，arg2 数值字符串 */
+    PROTO_PID,      /* 在线调参：arg1 参数名，arg2 数值字符串 */
+    PROTO_STATUS    /* 状态查询 @ST#：不带参数，输出由上层延迟到任务上下文打印 */
 } proto_cmd_t;
 
 /* 一条解析完成的指令。 */

@@ -6,15 +6,17 @@
  * 通过编译期替换 Port 实现（port_sim.c）把真实控制代码接进倒立摆模型——
  * 跑的就是要烧进芯片的那份算法，这是无硬件条件下最强的验证形态。
  *
- * 实验清单（对应方案 §3 Phase 3 验收）：
+ * 实验清单（对应方案 §3 Phase 3 验收 + Phase 4 安全机制）：
  *   E1  初始倾角 10° 的直立恢复 → 收敛时间/超调（要求 3s 内进 ±0.5°）
  *   E2  t=2s 施加速度冲击 → 抗扰恢复时间（要求 2s 内回到 ±0.5°）
  *   E3  静态台架：卡尔曼 vs 互补滤波 vs 纯积分（陀螺零偏漂移对比）
  *   E4  balance_kp 参数扫描 {-400..-1040} → 超调/收敛/振荡趋势
- *   E5  控制周期抖动敏感性 {0,1,2,5}ms → 证明"确定性周期"的价值
+ *   E5  控制周期抖动敏感性 {0,1,2,5,10}ms → 证明"确定性周期"的价值
+ *   E6  倾角越限保护：60° 倒地 → 0.5s 后 PWM 必须恒 0
+ *   E7  欠压降功率：9.0V → 全程 |PWM| ≤ 半量程（且电压读数正确传递）
  *
  * 用法：
- *   sil_sim <e1|e2|e3|e4|e5|all> [outdir] [--check]
+ *   sil_sim <e1|...|e7|all> [outdir] [--check]
  *   --check 时按验收标准决定退出码（供 CTest 门禁用）。
  *
  * 所有随机过程（噪声、抖动、冲击时刻）均为确定性种子，实验可复现。
@@ -71,6 +73,7 @@ typedef struct {
     double impulse_dv;
     int freeze;           /* E3：台架冻结 */
     double freeze_theta;
+    double battery_v;     /* >0 时覆盖仿真电池电压（E7 欠压实验） */
 } run_cfg_t;
 
 /* ======== 收敛指标 ======== */
@@ -150,6 +153,10 @@ static void RunClosedLoop(const run_cfg_t *cfg, trace_t *tr)
     if (cfg->freeze)
     {
         PortSim_Freeze(1, cfg->freeze_theta);
+    }
+    if (cfg->battery_v > 0.0)
+    {
+        PortSim_SetBattery((float)cfg->battery_v);
     }
     g_jitter_rng = 0.13579;
 
@@ -643,6 +650,124 @@ static int DoE5(const char *dir, int check)
     return rc;
 }
 
+/* ======== E6 倾角越限保护 ======== */
+static int DoE6(const char *dir, int check)
+{
+    run_cfg_t cfg;
+    trace_t tr;
+    int i;
+    int idx_cut = -1;
+    int max_kalman_idx = 0;
+    int cut_ok = 1;
+    int tripped = 0;
+
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.theta0 = 60.0; /* 直接以倒地姿态上电 */
+    cfg.t_total = 2.5;
+    cfg.impulse_t = -1.0;
+
+    Trace_Init(&tr, 1024);
+    RunClosedLoop(&cfg, &tr);
+    if (!Trace_WriteCsv(&tr, dir, "e6", 0, NULL, NULL))
+    {
+        return 2;
+    }
+
+    for (i = 0; i < tr.n; i++)
+    {
+        /* 保护触发后（卡尔曼越 45°），PWM 必须恒 0。 */
+        if (fabs(tr.kalman[i] - 0.0) > CAR_TILT_PROTECT_DEG + 5.0)
+        {
+            tripped = 1;
+        }
+        if (tr.t[i] >= 0.5)
+        {
+            idx_cut = i;
+            break;
+        }
+        if (fabs(tr.kalman[i]) > fabs(tr.kalman[max_kalman_idx]))
+        {
+            max_kalman_idx = i;
+        }
+    }
+    for (i = (idx_cut > 0) ? idx_cut : 0; i < tr.n; i++)
+    {
+        if (tr.u[i] != 0.0)
+        {
+            cut_ok = 0;
+            break;
+        }
+    }
+    /* 0.5s 内卡尔曼必须已经越过 45°（证明保护真的触发过，而不是从未启动）。 */
+    for (i = 0; i < tr.n && tr.t[i] < 0.5; i++)
+    {
+        if (fabs(tr.kalman[i]) > CAR_TILT_PROTECT_DEG)
+        {
+            tripped = 1;
+            break;
+        }
+    }
+
+    printf("[E6] 倾角越限保护(60 度倒地): trip=%s pwm_cut=%s -> %s\n",
+           tripped ? "YES" : "NO", cut_ok ? "YES" : "NO",
+           (tripped && cut_ok) ? "PROTECTED" : "FAIL");
+    Trace_Free(&tr);
+
+    if (check && !(tripped && cut_ok))
+    {
+        fprintf(stderr, "E6 FAIL: 保护未触发或触发后 PWM 未归零\n");
+        return 1;
+    }
+    return 0;
+}
+
+/* ======== E7 欠压降功率 ======== */
+static int DoE7(const char *dir, int check)
+{
+    run_cfg_t cfg;
+    trace_t tr;
+    int i;
+    double max_u = 0.0;
+    int rc = 0;
+
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.theta0 = 10.0;
+    cfg.t_total = 1.5;
+    cfg.impulse_t = -1.0;
+    cfg.battery_v = 9.0; /* 低于 9.6V 进入欠压 */
+
+    Trace_Init(&tr, 512);
+    RunClosedLoop(&cfg, &tr);
+    if (!Trace_WriteCsv(&tr, dir, "e7", 0, NULL, NULL))
+    {
+        return 2;
+    }
+    for (i = 0; i < tr.n; i++)
+    {
+        double au = fabs(tr.u[i]);
+        if (au > max_u)
+        {
+            max_u = au;
+        }
+    }
+
+    printf("[E7] 欠压降功率(9.0V): battery=%.1fV max|pwm|=%.0f (limit=%d) -> %s\n",
+           (double)App_Car_GetBattery(), max_u,
+           CAR_PWM_LIMIT / CAR_UNDERVOLT_PWM_SCALE_DIV,
+           max_u <= (double)(CAR_PWM_LIMIT / CAR_UNDERVOLT_PWM_SCALE_DIV) ? "LOWPOWER" : "FAIL");
+    Trace_Free(&tr);
+
+    /* 校验：电压读数正确传递 + 全程输出不超过半量程（欠压模式生效）。
+     * 若欠压模式未生效，E1 同条件下 max|pwm| 会打到 7199。 */
+    if (check && !(App_Car_GetBattery() <= CAR_UNDERVOLT_ENTER_V + 0.01f &&
+                   max_u <= (double)(CAR_PWM_LIMIT / CAR_UNDERVOLT_PWM_SCALE_DIV)))
+    {
+        rc = 1;
+        fprintf(stderr, "E7 FAIL\n");
+    }
+    return rc;
+}
+
 static int RunAll(const char *dir, int check)
 {
     int fail = 0;
@@ -651,6 +776,8 @@ static int RunAll(const char *dir, int check)
     fail |= DoE3(dir, check);
     fail |= DoE4(dir, check);
     fail |= DoE5(dir, check);
+    fail |= DoE6(dir, check);
+    fail |= DoE7(dir, check);
     return fail;
 }
 
@@ -697,10 +824,18 @@ int main(int argc, char **argv)
     {
         return DoE5(dir, check);
     }
+    if (strcmp(exp, "e6") == 0)
+    {
+        return DoE6(dir, check);
+    }
+    if (strcmp(exp, "e7") == 0)
+    {
+        return DoE7(dir, check);
+    }
     if (strcmp(exp, "all") == 0)
     {
         return RunAll(dir, check);
     }
-    fprintf(stderr, "unknown experiment '%s' (e1|e2|e3|e4|e5|all)\n", exp);
+    fprintf(stderr, "unknown experiment '%s' (e1|...|e7|all)\n", exp);
     return 2;
 }

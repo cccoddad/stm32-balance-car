@@ -20,6 +20,7 @@
 #include "port_battery.h"
 #include "port_display.h"
 #include "port_uart.h"
+#include "port_wdt.h"
 
 /* 全局运行参数实例（定义在 App_Car.c，初始化为 CAR_PARAMS_DEFAULT）。
  * 串口协议 @PID,BKP,x# 在线修改的就是它。 */
@@ -40,5 +41,11 @@ void App_Car_PID(void);
 
 /* 读取卡尔曼滤波后的当前倾角（度）：OLED/串口日志/SIL 仿真的统一取值入口。 */
 float App_Car_GetAttitude(void);
+
+/* 读取控制任务采样到的电池电压（显示/状态输出用）。 */
+float App_Car_GetBattery(void);
+
+/* 取走并清零"状态查询请求"：中断只置位，显示任务消费后执行打印。 */
+uint8_t App_Car_ConsumeStatusReq(void);
 
 #endif /* __APP_CAR_H */

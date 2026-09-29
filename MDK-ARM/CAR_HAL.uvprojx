@@ -564,6 +564,11 @@
               <FilePath>..\BSP\bsp_encoder.c</FilePath>
             </File>
             <File>
+              <FileName>bsp_iwdg.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\bsp_iwdg.c</FilePath>
+            </File>
+            <File>
               <FileName>bsp_imu.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\bsp_imu.c</FilePath>

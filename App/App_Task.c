@@ -1,5 +1,8 @@
 #include "App_Task.h"
+#include "App_Car.h"
 #include "Car_Config.h"
+#include "port_wdt.h"
+#include "stm32f1xx.h" /* DWT/CoreDebug：运行时统计时基 */
 #include <stdio.h>
 
 TaskHandle_t start_task_handle;
@@ -32,10 +35,60 @@ void App_Task_GetPeriodStats(control_period_stats_t *out)
     *out = s_period_stats;
 }
 
+/* ======== 运行时统计时基：DWT 周期计数器 ======== */
+/* FreeRTOSConfig.h 的 portGET_RUN_TIME_COUNTER_VALUE 指向这里。
+ * 72MHz 下 32 位计数约 59.6s 回绕——统计表按快照查看，已在配置头注明局限。 */
+void App_RunTimeStatsInit(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk; /* 打开 DWT 等调试单元 */
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;            /* 启用周期计数 */
+}
+
+unsigned long App_GetCycles(void)
+{
+    return DWT->CYCCNT;
+}
+
+/* 状态打印缓冲：静态分配（显示任务栈只有 128 word，放不下）。
+ * 运行时统计表一行约 60 字节 × 4 任务 + 表头，384 字节足够。 */
+static char s_status_buf[384];
+
+/**
+ * @brief 打印完整状态块（阻塞式，只能在任务上下文调用）。
+ *
+ * 数据来源全部是"谁拥有谁打印"：周期统计来自本文件、角度/电压来自
+ * App_Car 访问器、栈水位来自 FreeRTOS API 直接读各任务 TCB。
+ */
+void App_Task_PrintStatus(void)
+{
+    control_period_stats_t st;
+    App_Task_GetPeriodStats(&st);
+
+    printf("[STAT] attitude=%+6.1f deg  battery=%4.1f V\r\n",
+           (double)App_Car_GetAttitude(), (double)App_Car_GetBattery());
+    printf("[STAT] period: n=%u min=%u max=%u tick (expect 10)\r\n",
+           (unsigned)st.samples, (unsigned)st.min_ticks, (unsigned)st.max_ticks);
+    printf("[STAT] stack free (word): data=%u pid=%u disp=%u\r\n",
+           (unsigned)uxTaskGetStackHighWaterMark(data_task_handle),
+           (unsigned)uxTaskGetStackHighWaterMark(pid_task_handle),
+           (unsigned)uxTaskGetStackHighWaterMark(display_task_handle));
+    printf("[STAT] params: BKP=%.1f BKD=%.3f BANG=%.1f VKP=%.1f VKI=%.3f TKP=%.2f\r\n",
+           (double)g_car_params.balance_kp, (double)g_car_params.balance_kd,
+           (double)g_car_params.balance_angle, (double)g_car_params.velocity_kp,
+           (double)g_car_params.velocity_ki, (double)g_car_params.turn_kp);
+    /* 运行时统计：按累计 CPU 周期折算百分比（快照视图）。 */
+    s_status_buf[0] = '\0';
+    vTaskGetRunTimeStats(s_status_buf);
+    printf("[STAT] cpu%% (name: cycles%%)\r\n%s", s_status_buf);
+}
+
 void App_Task_Init(void)
 {
-    /* 1. 应用层初始化（滤波/协议/IMU/串口回调），必须在调度器启动前完成。 */
+    /* 1. 应用层初始化（滤波/协议/IMU/串口回调/看门狗启动）与
+     *    运行时统计时基，都必须在调度器启动前完成。 */
     App_Car_Init();
+    App_RunTimeStatsInit();
 
     /* 2. 创建启动任务。启动任务只负责继续创建其他业务任务。 */
     xTaskCreate(
@@ -165,6 +218,10 @@ void App_Task_PID(void *pvParameters)
         }
 #endif
         App_Car_PID();
+
+        /* 喂狗：控制任务活着 = 整个闭环活着。看门狗超时 2.56s，
+         * 本任务若卡死（死锁/硬件挂死）将触发硬件复位。 */
+        port_wdt_feed();
     }
 }
 
@@ -179,6 +236,14 @@ void App_Task_Display(void *pvParameters)
     while (1)
     {
         App_Car_Display();
+
+        /* 收到 @ST# 请求则打印状态块（中断里只置位，阻塞式 printf 在这里执行，
+         * 打印期间被更高优先级的控制任务抢占是安全的）。 */
+        if (App_Car_ConsumeStatusReq())
+        {
+            App_Task_PrintStatus();
+        }
+
         vTaskDelayUntil(&pxPreviousWakeTime, CAR_DISPLAY_PERIOD_MS);
     }
 }

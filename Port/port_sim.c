@@ -20,6 +20,7 @@
 #include "port_display.h"
 #include "port_uart.h"
 #include "port_sim.h"
+#include "port_wdt.h"
 #include "sim/pendulum_model.h"
 
 #include <math.h>
@@ -37,6 +38,7 @@ static pendulum_t s_model;
 static int s_frozen = 0;
 static double s_frozen_theta = 0.0;
 static double s_gyro_bias = SIM_GYRO_BIAS0;
+static float s_battery_volts = 11.1f;
 static int16_t s_last_pwm_a, s_last_pwm_b;
 static float s_last_accel_angle, s_last_gyro_y;
 
@@ -62,6 +64,7 @@ void PortSim_Reset(double theta0_deg, unsigned int seed)
     s_frozen = 0;
     s_frozen_theta = 0.0;
     s_gyro_bias = SIM_GYRO_BIAS0;
+    s_battery_volts = 11.1f;
     s_last_pwm_a = 0;
     s_last_pwm_b = 0;
     s_last_accel_angle = (float)(theta0_deg + PORT_SIM_MOUNT_OFFSET_DEG);
@@ -104,6 +107,8 @@ void PortSim_GetTruth(double *theta_deg, double *v_mps, double *x_m)
     *v_mps = s_model.v_mps;
     *x_m = s_model.x_m;
 }
+
+void PortSim_SetBattery(float volts) { s_battery_volts = volts; }
 
 int32_t PortSim_GetLastPwmA(void) { return s_last_pwm_a; }
 int32_t PortSim_GetLastPwmB(void) { return s_last_pwm_b; }
@@ -189,8 +194,8 @@ void port_motor_set(int16_t pwm_a, int16_t pwm_b)
 
 float port_battery_read(void)
 {
-    /* 静态 3S 电池标称电压，无 ADC 噪声（本实验不关注电源）。 */
-    return 11.1f;
+    /* 标称 3S 11.1V；欠压实验用 PortSim_SetBattery 覆盖。 */
+    return s_battery_volts;
 }
 
 void port_display_show(float bat_v, int32_t ea, int32_t eb, float angle)
@@ -205,6 +210,15 @@ void port_display_show(float bat_v, int32_t ea, int32_t eb, float angle)
 void port_uart_init(void)
 {
     /* 仿真不启中断接收；实验如需遥控可直接调用注册的回调。 */
+}
+
+void port_wdt_init(void)
+{
+    /* PC 上没有复位语义。 */
+}
+
+void port_wdt_feed(void)
+{
 }
 
 void port_uart_set_rx_cb(port_uart_rx_cb_t cb)

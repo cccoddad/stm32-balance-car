@@ -65,12 +65,16 @@ target_include_directories(sil_sim PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}          # sim/pendulum_model.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../Port  # port_sim.h
 )
+# 主机侧：App 层的临界区宏走空实现（见 App/car_critical.h）
+target_compile_definitions(sil_sim PRIVATE CAR_HOST_BUILD)
 target_link_libraries(sil_sim PRIVATE car_service)
 if(NOT WIN32)
     target_link_libraries(sil_sim PRIVATE m)
 endif()
 
-# E1/E2 作为 CTest 门禁（--check 按验收标准决定退出码）；
+# 安全与闭环验收进 CTest 门禁（--check 按验收标准决定退出码）；
 # E3~E5 属实验性产出（CSV/图表），由 tools/plot.py 消费，不设硬门禁。
 add_test(NAME sil_e1 COMMAND sil_sim e1 sim_out --check)
 add_test(NAME sil_e2 COMMAND sil_sim e2 sim_out --check)
+add_test(NAME sil_e6 COMMAND sil_sim e6 sim_out --check)
+add_test(NAME sil_e7 COMMAND sil_sim e7 sim_out --check)
