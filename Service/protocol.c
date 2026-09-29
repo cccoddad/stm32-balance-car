@@ -148,7 +148,7 @@ bool Proto_Feed(proto_parser_t *p, uint8_t byte, proto_msg_t *msg)
 
     if (!p->in_frame)
     {
-        /* 裸字符遥控模式：兼容课程配套蓝牙助手的单字符指令。 */
+        /* 裸字符遥控模式：兼容手机蓝牙串口助手的单字符指令。 */
         switch (byte)
         {
         case 'U':
