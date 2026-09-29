@@ -40,8 +40,23 @@
 /* 速度环积分限幅，防止积分饱和导致恢复变慢甚至失控。 */
 #define CAR_VELOCITY_I_LIMIT (10000)
 
-/* 倾角保护阈值（度）：超过该角度判定为已摔倒，应切断电机输出。 */
+/* 倾角保护阈值（度）：与目标平衡角的偏差超过该值判定为已摔倒，切断电机输出。
+ * 保护是"锁存式"的：触发后必须满足下面的恢复条件持续 CAR_TILT_RECOVER_HOLD_MS
+ * 才重新使能——原因见 App_Car_PID 注释（翻滚时加速度角 atan2 回绕会让
+ * 融合角在阈值附近抖动，普通电平式保护会反复启停）。 */
 #define CAR_TILT_PROTECT_DEG (45.0f)
+/* 恢复条件：接近直立（度）且车身基本静止（陀螺绝对值 deg/s 上限）。 */
+#define CAR_TILT_RECOVER_DEG (10.0f)
+#define CAR_TILT_RECOVER_GYRO_DPS (30.0f)
+/* 恢复条件需持续的静止时间（按采样周期折算成计数）。 */
+#define CAR_TILT_RECOVER_HOLD_COUNT ((unsigned)(500u / CAR_SAMPLE_PERIOD_MS))
+
+/* ======== 欠压保护（3S 锂电池） ======== */
+/* 进入/退出降功率的电压阈值（3.2V×3=9.6V 为截止，带迟滞防止在阈值附近反复切换）。 */
+#define CAR_UNDERVOLT_ENTER_V (9.6f)
+#define CAR_UNDERVOLT_EXIT_V  (10.2f)
+/* 降功率时的 PWM 限幅除数：半功率运行（保住控制不趴窝优先于性能）。 */
+#define CAR_UNDERVOLT_PWM_SCALE_DIV (2)
 
 /* ======== 卡尔曼滤波默认参数 ======== */
 /* 角度过程噪声协方差：越大越不相信模型预测。 */

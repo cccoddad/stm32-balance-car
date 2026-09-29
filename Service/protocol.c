@@ -116,6 +116,12 @@ static bool Proto_ParseFrame(const char *frame, proto_msg_t *msg)
         Proto_SetMsg(msg, PROTO_TURN, tok[1], 0);
         return true;
     }
+    if (tok[0][0] == 'S' && tok[0][1] == 'T' && tok[0][2] == '\0' && ntok == 1u)
+    {
+        /* @ST#：状态查询，无参数。 */
+        Proto_SetMsg(msg, PROTO_STATUS, tok[0], 0);
+        return true;
+    }
     if (tok[0][0] == 'P' && tok[0][1] == 'I' && tok[0][2] == 'D' && tok[0][3] == '\0' && ntok >= 3u)
     {
         /* @PID,<参数名>,<数值># */

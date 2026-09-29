@@ -32,6 +32,9 @@ void PortSim_Freeze(int enable, double theta_deg);
 /* 读取真值（度 / m/s / m）。 */
 void PortSim_GetTruth(double *theta_deg, double *v_mps, double *x_m);
 
+/* 设置仿真电池电压（port_battery_read 返回值），用于欠压保护实验。 */
+void PortSim_SetBattery(float volts);
+
 /* 最近一次 port_motor_set 的左右轮 PWM。 */
 int32_t PortSim_GetLastPwmA(void);
 int32_t PortSim_GetLastPwmB(void);

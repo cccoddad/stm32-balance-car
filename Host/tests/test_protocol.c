@@ -82,6 +82,12 @@ static void Test_Frames(void)
     CHECK(strcmp(msg.arg1, "BKP") == 0);
     CHECK(strcmp(msg.arg2, "-720.0") == 0);
 
+    /* @ST#：状态查询，无参数。 */
+    memset(&msg, 0, sizeof(msg));
+    CHECK(FeedStr(&p, "@ST#", &msg) == 1);
+    CHECK(msg.cmd == PROTO_STATUS);
+    CHECK(msg.arg1[0] == 'S');
+
     /* 帧内出现的逗号外内容不产生消息（收帧中字节静默消费）。 */
     CHECK(FeedStr(&p, "@MV", 0) == 0);
     Proto_Init(&p);

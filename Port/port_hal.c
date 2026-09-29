@@ -12,12 +12,14 @@
 #include "port_battery.h"
 #include "port_display.h"
 #include "port_uart.h"
+#include "port_wdt.h"
 
 #include "bsp_imu.h"
 #include "bsp_encoder.h"
 #include "bsp_motor.h"
 #include "bsp_adc.h"
 #include "bsp_uart.h"
+#include "bsp_iwdg.h"
 #include "oled.h"
 
 #include <stdio.h>
@@ -93,6 +95,18 @@ void port_display_show(float bat_v, int32_t ea, int32_t eb, float angle)
 void port_uart_init(void)
 {
     BSP_UART2_Init();
+}
+
+/* ======== 看门狗 ======== */
+
+void port_wdt_init(void)
+{
+    BSP_IWDG_Init();
+}
+
+void port_wdt_feed(void)
+{
+    BSP_IWDG_Feed();
 }
 
 void port_uart_set_rx_cb(port_uart_rx_cb_t cb)

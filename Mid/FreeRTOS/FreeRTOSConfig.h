@@ -48,7 +48,9 @@
 #define configMINIMAL_STACK_SIZE ((unsigned short)128)
 #define configTOTAL_HEAP_SIZE ((size_t)(15 * 1024)) // 芯片最大SRAM20，预留一点
 #define configMAX_TASK_NAME_LEN (16)
-#define configUSE_TRACE_FACILITY 0
+/* 打开 trace：vTaskList/vTaskGetRunTimeStats 的任务快照接口依赖它
+ * （运行时统计见文件下方 configGENERATE_RUN_TIME_STATS 段）。 */
+#define configUSE_TRACE_FACILITY 1
 #define configUSE_16_BIT_TICKS 0
 #define configIDLE_SHOULD_YIELD 1
 
@@ -71,6 +73,24 @@ to exclude the API function. */
 #define INCLUDE_vTaskSuspend 1
 #define INCLUDE_vTaskDelayUntil 1
 #define INCLUDE_vTaskDelay 1
+/* 栈高水位查询：状态上报用（"每个任务还剩多少栈"），见 App_Task_PrintStatus。 */
+#define INCLUDE_uxTaskGetStackHighWaterMark 1
+
+/* ======== 运行时统计（每个任务累计占用 CPU 周期） ========
+ * 时基用 DWT->CYCCNT（72MHz 全速周期计数）：
+ *   - 优点：零外设开销，32 位；
+ *   - 已知局限：2^32 / 72MHz ≈ 59.6s 回绕，回绕后的那个统计窗口百分比失真
+ *     （快照式查看、频繁刷新即可；要长期精确需换 1MHz 预分频定时器，但
+ *      TIM2/TIM5 已被占用，列为止损项）。
+ * 函数实现在 App/App_Task.c。 */
+#define configGENERATE_RUN_TIME_STATS 1
+#define configUSE_STATS_FORMATTING_FUNCTIONS 1
+/* vTaskList/vTaskGetRunTimeStats 依赖任务快照接口（与上面的 TRACE 配套）。 */
+#define INCLUDE_uxTaskGetSystemState 1
+extern void App_RunTimeStatsInit(void);
+extern unsigned long App_GetCycles(void);
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() App_RunTimeStatsInit()
+#define portGET_RUN_TIME_COUNTER_VALUE() App_GetCycles()
 
 /* This is the raw value as per the Cortex-M3 NVIC.  Values can be 255
 (lowest) to 0 (1?) (highest). */
