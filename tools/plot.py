@@ -218,7 +218,7 @@ def main():
 
     plot_recovery(csv_dir, out, "e1", "e1_recovery.png",
                   "E1 初始倾角 10° 的直立恢复",
-                  "课程默认参数；1.16 s 进入 ±0.5° 并保持，反向超调 3.7°")
+                  "默认参数；1.16 s 进入 ±0.5° 并保持，反向超调 3.7°")
     plot_recovery(csv_dir, out, "e2", "e2_impulse.png",
                   "E2 速度冲击后的抗扰恢复",
                   "t = 2 s 施加 0.3 m/s 速度冲击；1.22 s 恢复到 ±0.5°",

@@ -125,7 +125,6 @@ int main(void)
         第四个参数：字体高度（字库支持）
         第五个参数：显示模式，0反显（白底黑子），1正显（黑底白字）
      */
-    // OLED_ShowString(0,10,"atguigu",16,1);
     OLED_ShowString(0, 0, "BAT:       V", 16, 1);
     OLED_ShowString(0, 16, "EA:", 16, 1);
     OLED_ShowString(0, 32, "EB:", 16, 1);
