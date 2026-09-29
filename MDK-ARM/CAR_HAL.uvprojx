@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F103xB</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../BSP;../BSP/oled;../Service;../App;../Mid/FreeRTOS;../Mid/FreeRTOS/include;../Mid/FreeRTOS/Portable</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../BSP;../BSP/oled;../Service;../Port;../App;../Mid/FreeRTOS;../Mid/FreeRTOS/include;../Mid/FreeRTOS/Portable</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -554,6 +554,11 @@
           <GroupName>BSP</GroupName>
           <Files>
             <File>
+              <FileName>bsp_adc.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\bsp_adc.c</FilePath>
+            </File>
+            <File>
               <FileName>bsp_encoder.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\bsp_encoder.c</FilePath>
@@ -569,9 +574,24 @@
               <FilePath>..\BSP\bsp_motor.c</FilePath>
             </File>
             <File>
+              <FileName>bsp_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\bsp_uart.c</FilePath>
+            </File>
+            <File>
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\oled\oled.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Port</GroupName>
+          <Files>
+            <File>
+              <FileName>port_hal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Port\port_hal.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -587,6 +607,11 @@
               <FileName>control_pid.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Service\control_pid.c</FilePath>
+            </File>
+            <File>
+              <FileName>protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Service\protocol.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -10,7 +10,7 @@
  * 编码器模式下，定时器硬件会根据 AB 相自动增减 CNT。读取后立即清零，
  * 下一次再读到的就是两个采样周期之间的增量，可近似表示轮速。
  */
-int Int_Encoder_ReadCounter(uint8_t timx)
+int BSP_Encoder_ReadCount(uint8_t timx)
 {
     int encoder_value = 0;
     switch (timx)

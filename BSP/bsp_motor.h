@@ -23,6 +23,6 @@
 
 
 /* 根据 PID 输出的带符号 PWM，设置左右电机方向与占空比。 */
-void Int_TB6612_SetPWM(int pwma, int pwmb);
+void BSP_Motor_SetPWM(int pwma, int pwmb);
 
 #endif

@@ -1,147 +1,114 @@
 #include "App_Car.h"
-#include "Car_Config.h"
-#include <stdio.h>
+#include <math.h>
+#include <string.h>
 
-short gx, gy, gz;
-short ax, ay, az;
+/* 圆周率常量，把 atan2 的弧度换算为角度。 */
+#define PI 3.14159265
 
-float accel_angle;  // 由加速度计换算得到的车身倾角，单位为度。
-float gyro_y;       // Y 轴角速度，使用陀螺仪原始值换算得到，单位为度/秒。
-extern float angle; // 卡尔曼滤波后的最终倾角，定义在滤波模块中。
+/* ======== 运行参数 ======== */
+/* 实例唯一、编译期用 Car_Config.h 默认值初始化；运行期可经协议在线修改。 */
+car_params_t g_car_params = CAR_PARAMS_DEFAULT;
 
-int ea, eb;
+/* ======== 模块状态（static 收敛作用域，同时便于调试器观察） ======== */
+/* 卡尔曼滤波器实例：倾角/零偏/协方差全部内聚，不再散落全局变量。 */
+static kalman_t s_kalman;
+/* 速度环状态（积分 + 低通），由本层持有跨周期保持。 */
+static velocity_pid_state_t s_vel_state;
+/* 本周期六轴原始数据。 */
+static port_imu_data_t s_imu;
+/* 本周期编码器增量（eb 方向已统一）。 */
+static int32_t s_enc_a, s_enc_b;
+/* 加速度换算倾角与陀螺换算角速度（滤波输入，保留供观察）。 */
+static float s_accel_angle;
+static float s_gyro_y;
+/* 串口协议解析状态机。 */
+static proto_parser_t s_parser;
 
-/* 显示缓冲区统一留 8 字节：覆盖最坏格式化长度（含符号、小数位）再加结束符，
- * 配合 snprintf 使用，杜绝 sprintf 无边界写入。 */
-char bat_str[8];   // 电池电压：如 "12.3"。
-char ea_str[8];    // A 编码器：如 "-32768"。
-char eb_str[8];    // B 编码器：如 "-32768"。
-char angle_str[8]; // 倾角：如 "-100.5"。
+/* 遥控状态：由串口字节回调（中断上下文）更新，控制任务读取。
+ * 任一方向指令都会清掉其它方向（互斥），语义与旧版单字符 switch 一致。 */
+static uint8_t flag_up, flag_down, flag_left, flag_right;
+/* 遥控前后控制量（速度环目标偏移）与转向差速累加量。 */
+static int remote_move, remote_turn;
 
-/* 直立环 PID 参数：负责把车身拉回目标平衡角。 */
-float balance_kp = -720.0;  // 直立环比例系数，影响扶正力度；符号由电机安装方向和角度方向决定。
-float balance_kd = 0.72;    // 直立环微分系数，利用角速度抑制快速倒下和高频振荡。
-float balance_angle = -1.0; // 机械安装后的目标平衡角，车不一定在 0 度时刚好直立。
-/* 速度环 PID 参数：负责让小车整体速度趋近目标速度，防止长时间向一个方向跑偏。 */
-float velocity_kp = 170.0; // 速度环比例系数，决定当前速度偏差对输出的影响。
-float velocity_ki = 0.85;  // 速度环积分系数，决定长期速度偏差的修正强度。
-/* 转向环 PID 参数：负责在没有遥控转向时抑制 Z 轴自转。 */
-float turn_kp = 0.5; // 转向环比例系数，输入为 Z 轴角速度。
+/* 前向声明：协议消息处理（先于注册回调定义）。 */
+static void App_Car_HandleMsg(const proto_msg_t *msg);
+static void App_Car_OnRxByte(uint8_t byte);
 
-/* 遥控运动标志位，由串口接收回调根据 U/D/L/R/S 指令更新。 */
-uint8_t flag_up = 0, flag_down = 0, flag_left = 0, flag_right = 0;
-int remote_move = 0; // 遥控前进/后退控制量，作为速度环的目标偏移。
-int remote_turn = 0; // 遥控左转/右转控制量，直接叠加到左右电机差速上。
+/**
+ * @brief 应用层初始化（调度器启动前调用）。
+ *
+ * 顺序要求：先复位解析器，再启动串口接收并注册回调，避免回调打到
+ * 未初始化的状态机上。
+ */
+void App_Car_Init(void)
+{
+    Kalman_Init(&s_kalman);
+    PID_VelocityStateReset(&s_vel_state);
+    Proto_Init(&s_parser);
+
+    port_imu_init();
+    port_uart_init();
+    port_uart_set_rx_cb(App_Car_OnRxByte);
+}
 
 /**
  * @brief 获取平衡车姿态与轮速数据。
  *
- * 该函数完成一次控制周期所需的核心采样：先读取 MPU6050 的加速度和角速度，
- * 再通过加速度计算静态倾角，通过陀螺仪得到动态角速度，最后用卡尔曼滤波融合出
- * 更稳定的车身倾角。同时读取两个编码器的增量值，使姿态数据和速度数据保持同频。
+ * 一次控制周期的完整采样：读六轴 → 加速度算静态倾角 → 陀螺得角速度 →
+ * 卡尔曼融合 → 同频读取编码器增量。
  */
 void App_Car_GetAngle(void)
 {
     /* 1. 读取 MPU6050 的三轴加速度和三轴角速度原始数据。 */
-    Int_MPU6050_Get_Accel(&ax, &ay, &az);
-    Int_MPU6050_Get_Gyro(&gx, &gy, &gz);
+    port_imu_read(&s_imu);
 
     /* 2. 通过 X/Z 轴加速度计算车身倾角。atan2 返回弧度，需要换算为角度。 */
-    accel_angle = atan2(ax, az) * 180 / PI;
+    s_accel_angle = atan2(s_imu.ax, s_imu.az) * 180 / PI;
 
-    /* 3. 陀螺仪量程设置为 +/-2000 度/秒，比例系数为 65536 / 4000 = 16.4。 */
-    /*    这里取反是为了让角速度方向与加速度计算出的倾角方向保持一致。 */
-    gyro_y = -gy / 16.4;
+    /* 3. 陀螺仪量程 +/-2000 度/秒，比例系数 65536 / 4000 = 16.4。 */
+    /*    取反是为了让角速度方向与加速度计算的倾角方向一致。 */
+    s_gyro_y = -s_imu.gy / 16.4;
 
-    /* 4. 使用卡尔曼滤波融合倾角和角速度，减小加速度噪声与陀螺仪漂移。 */
-    Com_Filter_Kalman(accel_angle, gyro_y);
-
-    // printf("accel_angle=%.1f\r\n", accel_angle);
-    // printf("gyro_y=%.1f\r\n", gyro_y);
-    // printf("angle=%.1f\r\n", angle);
+    /* 4. 卡尔曼融合，减小加速度噪声与陀螺漂移。结果存入 s_kalman.angle。 */
+    Kalman_Update(&s_kalman, s_accel_angle, s_gyro_y);
 
     /* 5. 读取编码器增量。B 轮取反是为了统一两个电机的正方向。 */
-    ea = Int_Encoder_ReadCounter(2);
-    eb = -Int_Encoder_ReadCounter(3);
+    port_encoder_read(&s_enc_a, &s_enc_b);
+    s_enc_b = -s_enc_b;
 }
 
 /**
- * @brief 刷新 OLED 显示内容。
+ * @brief 刷新 OLED 显示（电压 / 编码器 / 倾角）。
  *
- * 显示电池电压、两个编码器的本周期计数值和卡尔曼滤波后的倾角。
- * OLED 使用显存缓冲，字符串写入显存后需要调用 OLED_Refresh 才会真正显示。
+ * 采集与格式化经 Port 层完成，本层只负责"什么时候显示、显示什么"。
  */
 void App_Car_Display(void)
 {
-    /* 1. 采集并显示电池电压。电阻分压后进入 ADC，因此需要乘以 4 还原实际电压。 */
-    float bat_vol = 0.0f;
-    /* ADC 为单次转换模式：启动后必须等待转换完成（PollForConversion）才能取值，
-     * 否则读到的是上一次的残留结果甚至 0。 */
-    if (HAL_ADC_Start(&hadc1) == HAL_OK)
-    {
-        if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
-        {
-            bat_vol = ((float)HAL_ADC_GetValue(&hadc1) * 3.3f / 4095.0f) * 4.0f;
-        }
-    }
-
-    snprintf(bat_str, sizeof(bat_str), "%3.1f", bat_vol);
-    OLED_ShowString(32, 0, bat_str, 16, 1);
-
-    /* 2. 显示左右编码器增量，用于观察电机转速和方向是否一致。 */
-    snprintf(ea_str, sizeof(ea_str), "%6d", ea);
-    snprintf(eb_str, sizeof(eb_str), "%6d", eb);
-    OLED_ShowString(24, 16, ea_str, 16, 1); // 前面已经显示“EA:”，所以从 x=3*8=24 的位置开始写数值。
-    OLED_ShowString(24, 32, eb_str, 16, 1); // 前面已经显示“EB:”，第三行 y 坐标为 32。
-
-    /* 3. 显示当前倾角，用来辅助调试直立环目标角和滤波效果。 */
-    snprintf(angle_str, sizeof(angle_str), "%5.1f", angle);
-    OLED_ShowString(48, 48, angle_str, 16, 1); // 前面已经显示“Angle:”，所以从 x=6*8=48 的位置开始写数值。
-
-    /* 4. 将显存内容一次性刷新到 OLED 屏幕。 */
-    OLED_Refresh();
+    float bat_vol = port_battery_read();
+    port_display_show(bat_vol, s_enc_a, s_enc_b, s_kalman.angle);
 }
 
 /**
- * @brief 把控制量限制在 PWM 允许范围内。
- * @param value 三环叠加后的原始控制量。
- * @return 限制到 [-CAR_PWM_LIMIT, CAR_PWM_LIMIT] 之后的值。
- *
- * 三环输出叠加后可能远超 TIM4 的计数范围（ARR=7199），必须统一限幅：
- * 既防止写入比较寄存器的值超出硬件范围，也避免"饱和后反向迟滞"带来的
- * 积分饱和现象（配合速度环的积分限幅一起工作）。
- */
-static int App_Car_LimitPwm(int value)
-{
-    if (value > CAR_PWM_LIMIT)
-    {
-        return CAR_PWM_LIMIT;
-    }
-    if (value < -CAR_PWM_LIMIT)
-    {
-        return -CAR_PWM_LIMIT;
-    }
-    return value;
-}
-
-/**
- * @brief 执行一次平衡车控制运算，并输出到 TB6612 电机驱动。
+ * @brief 执行一次平衡车控制运算，并输出到电机。
  *
  * 控制结构由三部分叠加：
- * 1. 直立环：根据当前角度和目标平衡角输出主要扶正力矩。
- * 2. 速度环：根据编码器速度偏差修正车身前后移动趋势。
- * 3. 转向环/遥控转向：通过左右电机差速控制车身绕 Z 轴旋转。
+ * 1. 直立环 PD：主要扶正力矩；
+ * 2. 速度环 PI：修正长期前后移动趋势（遥控前后改其目标）；
+ * 3. 转向环 P / 遥控差速：控制绕 Z 轴旋转。
+ * 三环叠加后统一限幅再交 Port 输出。
  */
 void App_Car_PID(void)
 {
-    int balance_out = 0;
-    int velocity_out = 0;
-    int turn_out = 0;
-    int pwma = 0, pwmb = 0;
-    /* 1. 直立环控制：输出是左右电机共同的基础 PWM。 */
-    balance_out = Com_PID_Balance(balance_kp, balance_kd, angle, balance_angle, gy);
+    int32_t balance_out;
+    int32_t velocity_out;
+    int32_t turn_out = 0;
+    int32_t pwma, pwmb;
 
-    /* 2. 速度环控制：遥控前后指令通过 remote_move 改变速度环目标。 */
+    /* 1. 直立环：以卡尔曼倾角为输入。 */
+    balance_out = PID_Balance(&g_car_params, s_kalman.angle,
+                              g_car_params.balance_angle, s_imu.gy);
+
+    /* 2. 遥控前后 → 速度环目标偏移；无指令时清零，避免残留量影响自动平衡。 */
     if (flag_up)
     {
         remote_move = 50;
@@ -152,12 +119,12 @@ void App_Car_PID(void)
     }
     else
     {
-        /* 没有前后遥控时清零目标偏移，避免残留控制量影响自动平衡。 */
         remote_move = 0;
     }
-    velocity_out = Com_PID_Velocity(velocity_kp, velocity_ki, ea, eb, remote_move);
+    velocity_out = PID_Velocity(&s_vel_state, &g_car_params,
+                                (int)s_enc_a, (int)s_enc_b, remote_move);
 
-    /* 3. 转向控制：遥控转向时直接累加差速；不转向时用 Z 轴角速度抑制自转。 */
+    /* 3. 转向：遥控时累加差速；不遥控时用转向环抑制 Z 轴自转。 */
     if (flag_left)
     {
         remote_turn += -20;
@@ -168,62 +135,94 @@ void App_Car_PID(void)
     }
     else
     {
-        /* 没有左右遥控时清零遥控差速。 */
         remote_turn = 0;
-        /* 只有不主动转向时才启用转向环，避免抵消遥控转向意图。 */
-        turn_out = Com_PID_Turn(turn_kp, gz);
+        /* 只有不主动转向时才启用转向环，避免抵消遥控意图。 */
+        turn_out = PID_Turn(&g_car_params, s_imu.gz);
     }
-    /* 遥控按键持续按住会让差速不断累加，因此需要限幅保护。 */
-    if (remote_turn > CAR_REMOTE_TURN_LIMIT)
-    {
-        remote_turn = CAR_REMOTE_TURN_LIMIT;
-    }
-    else if (remote_turn < -CAR_REMOTE_TURN_LIMIT)
-    {
-        remote_turn = -CAR_REMOTE_TURN_LIMIT;
-    }
+    /* 持续按住会不断累加差速，需要限幅保护。 */
+    remote_turn = PID_Clamp(remote_turn, g_car_params.remote_turn_limit);
 
-    /* 4. 叠加三环输出。turn_out 和 remote_turn 以相反符号分配给左右轮，形成差速。
-     *    叠加结果统一限幅后再写入定时器，防止超出 PWM 硬件范围。 */
-    pwma = App_Car_LimitPwm(balance_out + velocity_out + turn_out + remote_turn);
-    pwmb = App_Car_LimitPwm(balance_out + velocity_out - turn_out - remote_turn);
-    Int_TB6612_SetPWM(pwma, pwmb);
+    /* 4. 三环叠加：turn_out 与 remote_turn 以相反符号分配给左右轮形成差速，
+     *    叠加结果统一限幅后输出，防止超出 PWM 硬件范围（ARR=7199）。 */
+    pwma = PID_Clamp(balance_out + velocity_out + turn_out + remote_turn,
+                     g_car_params.pwm_limit);
+    pwmb = PID_Clamp(balance_out + velocity_out - turn_out - remote_turn,
+                     g_car_params.pwm_limit);
+    port_motor_set((int16_t)pwma, (int16_t)pwmb);
 }
 
 /**
- * @brief USART2 接收完成回调，用于处理遥控指令。
- *
- * 每次串口中断接收 1 个字符：
- * U 表示前进，D 表示后退，L 表示左转，R 表示右转，S 表示停止。
- * 回调末尾重新开启中断接收，保证下一次字符仍能进入该回调。
+ * @brief 串口字节回调（中断上下文）：驱动协议状态机，产出指令即处理。
  */
-extern uint8_t buff[1];
-/* cppcheck-suppress constParameterPointer -- 参数 const 与否由 HAL 回调原型决定，不可改 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+static void App_Car_OnRxByte(uint8_t byte)
 {
-    if (huart->Instance == USART2)
+    proto_msg_t msg;
+    if (Proto_Feed(&s_parser, byte, &msg))
     {
-        switch (buff[0])
+        App_Car_HandleMsg(&msg);
+    }
+}
+
+/**
+ * @brief 把一条协议指令落到运行状态/参数上。
+ *
+ * 并发说明：本函数运行在 USART2 中断上下文，与控制任务并发。
+ * 标志位是单字节、参数是单精度浮点（32 位对齐单字存储），在 Cortex-M3
+ * 上均为原子写，不存在撕裂读写；多字段联动修改的互斥保护列入 Phase 4
+ * （互斥锁 + 优先级继承）。
+ */
+static void App_Car_HandleMsg(const proto_msg_t *msg)
+{
+    switch (msg->cmd)
+    {
+    case PROTO_MOVE:
+        /* 与旧版一致：任何方向指令同时清掉其它方向（互斥）。 */
+        flag_up = (uint8_t)(msg->arg1[0] == 'U');
+        flag_down = (uint8_t)(msg->arg1[0] == 'D');
+        flag_left = 0;
+        flag_right = 0;
+        break;
+    case PROTO_TURN:
+        flag_left = (uint8_t)(msg->arg1[0] == 'L');
+        flag_right = (uint8_t)(msg->arg1[0] == 'R');
+        flag_up = 0;
+        flag_down = 0;
+        break;
+    case PROTO_PID:
+    {
+        /* 在线调参：@PID,<参数名>,<数值># ，数值非法则整条忽略。 */
+        float value;
+        if (!Proto_ParseFloat(msg->arg2, &value))
         {
-        case 'U':
-            flag_up = 1, flag_down = 0, flag_left = 0, flag_right = 0;
-            break;
-        case 'D':
-            flag_up = 0, flag_down = 1, flag_left = 0, flag_right = 0;
-            break;
-        case 'L':
-            flag_up = 0, flag_down = 0, flag_left = 1, flag_right = 0;
-            break;
-        case 'R':
-            flag_up = 0, flag_down = 0, flag_left = 0, flag_right = 1;
-            break;
-        case 'S':
-            flag_up = 0, flag_down = 0, flag_left = 0, flag_right = 0;
-            break;
-        default:
-            flag_up = 0, flag_down = 0, flag_left = 0, flag_right = 0;
             break;
         }
+        if (strcmp(msg->arg1, "BKP") == 0)
+        {
+            g_car_params.balance_kp = value;
+        }
+        else if (strcmp(msg->arg1, "BKD") == 0)
+        {
+            g_car_params.balance_kd = value;
+        }
+        else if (strcmp(msg->arg1, "BANG") == 0)
+        {
+            g_car_params.balance_angle = value;
+        }
+        else if (strcmp(msg->arg1, "VKP") == 0)
+        {
+            g_car_params.velocity_kp = value;
+        }
+        else if (strcmp(msg->arg1, "VKI") == 0)
+        {
+            g_car_params.velocity_ki = value;
+        }
+        else if (strcmp(msg->arg1, "TKP") == 0)
+        {
+            g_car_params.turn_kp = value;
+        }
+        break;
     }
-    HAL_UART_Receive_IT(&huart2, buff, 1);
+    default:
+        break;
+    }
 }

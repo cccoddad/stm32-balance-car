@@ -28,7 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "App_Task.h"
-#include "bsp_imu.h"
+#include "bsp_uart.h"
 #include "oled.h"
 /* USER CODE END Includes */
 
@@ -50,7 +50,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t buff[1];
+/* 接收缓冲已收进 bsp_uart.c（P1：HAL 回调与缓冲不再散落在 main/App）。 */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,11 +110,10 @@ int main(void)
     /* 启动TIM4的pwm模式 */
     HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
-    /* 启动串口2接收中断 */
-    HAL_UART_Receive_IT(&huart2, buff, 1);
+    /* 启动串口2中断接收（字节回调由 App 经 Port 注册） */
+    BSP_UART2_Init();
 
-    /* 初始化MPU6050 */
-    Int_MPU6050_Init();
+    /* MPU6050 初始化移入 App_Car_Init()（经 Port 层），在 App_Task_Init 中执行 */
 
     /* 初始化OLED */
     OLED_Init();

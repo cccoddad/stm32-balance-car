@@ -1,64 +1,70 @@
 #include "attitude_kalman.h"
 #include "Car_Config.h"
 
-/* 卡尔曼滤波参数：用于融合加速度计倾角和陀螺仪角速度。 */
-float K1 =0.02; 
-float angle, angle_dot;     
-float Q_angle=0.001;    // 角度过程噪声协方差，数值越大表示越不相信模型预测。
-float Q_gyro=0.003;     // 陀螺仪零偏过程噪声协方差，影响对陀螺仪漂移的修正速度。
-float R_angle=0.5;      // 加速度测量噪声协方差，数值越大表示越不相信加速度计角度。
-float dt=CAR_SAMPLE_PERIOD_S; // 滤波周期，由 Car_Config.h 统一定义，必须等于采样任务的实际周期。
-
-char  C_0 = 1;
-float Q_bias, Angle_err;
-float PCt_0, PCt_1, E;
-float K_0, K_1, t_0, t_1;
-float Pdot[4] ={0,0,0,0};
-float PP[2][2] = { { 1, 0 },{ 0, 1 } };
-
-/**
- * @brief 一阶卡尔曼滤波，融合加速度倾角与陀螺仪角速度。
- * @param Accel 由加速度计解算得到的倾角，低频稳定但容易受震动影响。
- * @param Gyro 陀螺仪角速度，高频响应快但长期会有零偏漂移。
- *
- * 算法思路：
- * 1. 先用陀螺仪角速度预测当前角度。
- * 2. 再用加速度计角度修正预测结果。
- * 3. 同时估计陀螺仪零偏 Q_bias，减小长期漂移。
- */
-void Com_Filter_Kalman(float Accel,float Gyro)      
+void Kalman_Init(kalman_t *k)
 {
-    angle+=(Gyro - Q_bias) * dt; // 先验估计：用角速度积分预测当前角度。
-    Pdot[0]=Q_angle - PP[0][1] - PP[1][0]; // 先验估计误差协方差的微分。
-
-    Pdot[1]=-PP[1][1];
-    Pdot[2]=-PP[1][1];
-    Pdot[3]=Q_gyro;
-    PP[0][0] += Pdot[0] * dt;   // 对协方差微分进行积分，得到新的误差协方差。
-    PP[0][1] += Pdot[1] * dt;
-    PP[1][0] += Pdot[2] * dt;
-    PP[1][1] += Pdot[3] * dt;
-        
-    Angle_err = Accel - angle;  // 测量残差：加速度角度与预测角度的差值。
-    
-    PCt_0 = C_0 * PP[0][0];
-    PCt_1 = C_0 * PP[1][0];
-    
-    E = R_angle + C_0 * PCt_0;
-    
-    K_0 = PCt_0 / E;
-    K_1 = PCt_1 / E;
-    
-    t_0 = PCt_0;
-    t_1 = C_0 * PP[0][1];
-
-    PP[0][0] -= K_0 * t_0;       // 更新后验估计误差协方差。
-    PP[0][1] -= K_0 * t_1;
-    PP[1][0] -= K_1 * t_0;
-    PP[1][1] -= K_1 * t_1;
-        
-    angle   += K_0 * Angle_err;  // 后验估计：修正后的最终角度。
-    Q_bias  += K_1 * Angle_err;  // 后验估计：修正陀螺仪零偏。
-    angle_dot   = Gyro - Q_bias; // 输出角速度，已扣除估计到的零偏。
+    k->angle = 0.0f;
+    k->angle_dot = 0.0f;
+    k->Q_bias = 0.0f;
+    k->Q_angle = CAR_KALMAN_Q_ANGLE;
+    k->Q_gyro = CAR_KALMAN_Q_GYRO;
+    k->R_angle = CAR_KALMAN_R_ANGLE;
+    /* dt 由 Car_Config.h 统一定义，必须等于采样任务的实际周期，
+     * 否则预测步 angle += ω·dt 的增益出错，收敛变慢甚至发散。 */
+    k->dt = CAR_SAMPLE_PERIOD_S;
+    /* 初始误差协方差取单位阵：对初始状态不做任何先验信任。 */
+    k->P00 = 1.0f;
+    k->P01 = 0.0f;
+    k->P10 = 0.0f;
+    k->P11 = 1.0f;
 }
 
+float Kalman_Update(kalman_t *k, float accel_angle, float gyro_rate)
+{
+    /* 本算法量测矩阵 H = [1, 0]，故 H·P·Hᵀ = P00，观测残差系数恒为 1。 */
+    float angle_err;
+    float pc0, pc1, e;
+    float k0, k1;
+    float t0, t1;
+    float pdot0, pdot1, pdot2, pdot3;
+
+    /* ---- 1. 预测步：用扣除零偏后的角速度积分预测倾角 ---- */
+    k->angle += (gyro_rate - k->Q_bias) * k->dt;
+
+    /* 误差协方差的先验预测：P = P + (Q - P相关项)·dt。 */
+    pdot0 = k->Q_angle - k->P01 - k->P10;
+    pdot1 = -k->P11;
+    pdot2 = -k->P11;
+    pdot3 = k->Q_gyro;
+    k->P00 += pdot0 * k->dt;
+    k->P01 += pdot1 * k->dt;
+    k->P10 += pdot2 * k->dt;
+    k->P11 += pdot3 * k->dt;
+
+    /* ---- 2. 量测修正步：用加速度计角度修正预测 ---- */
+    angle_err = accel_angle - k->angle; /* 测量残差 */
+
+    pc0 = k->P00; /* C₀=1 时 H·P·Hᵀ 的两个分量 */
+    pc1 = k->P10;
+
+    e = k->R_angle + pc0; /* 残差协方差 S = R + H·P·Hᵀ */
+
+    k0 = pc0 / e; /* 卡尔曼增益 */
+    k1 = pc1 / e;
+
+    t0 = pc0;
+    t1 = k->P01;
+
+    /* 后验误差协方差：P = (I - K·H)·P */
+    k->P00 -= k0 * t0;
+    k->P01 -= k0 * t1;
+    k->P10 -= k1 * t0;
+    k->P11 -= k1 * t1;
+
+    /* ---- 3. 后验状态估计 ---- */
+    k->angle += k0 * angle_err;  /* 修正倾角 */
+    k->Q_bias += k1 * angle_err; /* 修正陀螺零偏，抑制长期漂移 */
+    k->angle_dot = gyro_rate - k->Q_bias;
+
+    return k->angle;
+}

@@ -11,7 +11,7 @@
  * TB6612 使用两个方向引脚控制一个电机。这里的正反转只代表软件定义方向，
  * 如果实车方向相反，可以调整接线或交换 GO/BACK 对应的电平。
  */
-void Int_TB6612_MotorA(uint8_t direct)
+void BSP_Motor_SetDirA(uint8_t direct)
 {
     if(direct == GO)
     {
@@ -40,7 +40,7 @@ void Int_TB6612_MotorA(uint8_t direct)
  *
  * B 电机与 A 电机控制方式一致，只是使用 BIN1/BIN2 方向引脚。
  */
-void Int_TB6612_MotorB(uint8_t direct)
+void BSP_Motor_SetDirB(uint8_t direct)
 {
     if(direct == GO)
     {
@@ -71,7 +71,7 @@ void Int_TB6612_MotorB(uint8_t direct)
  * PID 输出的是带符号控制量，但 TB6612 需要“方向引脚 + PWM 占空比”两部分。
  * 所以本函数先根据正负号设置方向，再把负数取绝对值后写入定时器比较寄存器。
  */
-void Int_TB6612_SetPWM(int pwma,int pwmb)
+void BSP_Motor_SetPWM(int pwma,int pwmb)
 {
     /* 带符号 PWM 的处理步骤：先处理方向，再设置 PWM 占空比。 */
 
@@ -81,19 +81,19 @@ void Int_TB6612_SetPWM(int pwma,int pwmb)
     if(pwma > 0)
     {
         /* 正数表示 A 电机正转。 */
-        Int_TB6612_MotorA(GO);
+        BSP_Motor_SetDirA(GO);
     }
     else if(pwma < 0)
     {
         /* 负数表示 A 电机反转。 */
-        Int_TB6612_MotorA(BACK);
+        BSP_Motor_SetDirA(BACK);
         /* 定时器比较寄存器需要非负占空比，因此先取绝对值。 */
         pwma = -pwma;
     }
     else 
     {
         /* 控制量为 0 时进入刹车。 */
-        Int_TB6612_MotorA(STOP);
+        BSP_Motor_SetDirA(STOP);
     }
     /* 1.2 将 PWM 占空比写入 TIM4_CH4 的比较寄存器。 */
     // TIM4 ->CCR4 = pwma;
@@ -105,19 +105,19 @@ void Int_TB6612_SetPWM(int pwma,int pwmb)
     if(pwmb > 0)
     {
         /* 正数表示 B 电机正转。 */
-        Int_TB6612_MotorB(GO);
+        BSP_Motor_SetDirB(GO);
     }
     else if(pwmb < 0)
     {
         /* 负数表示 B 电机反转。 */
-        Int_TB6612_MotorB(BACK);
+        BSP_Motor_SetDirB(BACK);
         /* 定时器比较寄存器需要非负占空比，因此先取绝对值。 */
         pwmb = -pwmb;
     }
     else 
     {
         /* 控制量为 0 时进入刹车。 */
-        Int_TB6612_MotorB(STOP);
+        BSP_Motor_SetDirB(STOP);
     }
     /* 2.2 将 PWM 占空比写入 TIM4_CH3 的比较寄存器。 */
     // TIM4 ->CCR3 = pwmb;

@@ -73,12 +73,12 @@
 
 
 /* 初始化 MPU6050 的量程、采样率、滤波器和工作模式。 */
-void Int_MPU6050_Init(void);
+void BSP_IMU_Init(void);
 
 /* 读取陀螺仪三轴原始数据。 */
-void Int_MPU6050_Get_Gyro(short *gx, short *gy, short *gz);
+void BSP_IMU_ReadGyro(short *gx, short *gy, short *gz);
 
 /* 读取加速度计三轴原始数据。 */
-void Int_MPU6050_Get_Accel(short *ax, short *ay, short *az);
+void BSP_IMU_ReadAccel(short *ax, short *ay, short *az);
 
 #endif

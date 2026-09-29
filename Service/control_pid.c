@@ -1,81 +1,91 @@
 #include "control_pid.h"
-#include "Car_Config.h"
 
 /**
- * @brief 直立环 PD 控制。
- * @param kp 直立环比例系数，角度偏差越大，输出越大。
- * @param kd 直立环微分系数，用陀螺仪角速度抑制快速倾倒和振荡。
- * @param kalman_angle 卡尔曼滤波后的当前车身倾角。
- * @param balance_angle 期望平衡角，也就是小车静止直立时的目标角度。
- * @param gy Y 轴陀螺仪原始值，本函数沿用原始值参与微分项计算。
- * @return 直立环输出 PWM 分量，后续会与速度环、转向环输出叠加。
+ * @brief 把浮点控制量转换为限幅后的整型输出。
+ * @param out 浮点控制量（可能超出硬件范围）。
+ * @param limit 绝对值上限，对应 PWM 可用范围。
+ * @return 夹到 [-limit, limit] 之后的整型值。
+ *
+ * 先在浮点域比较再转整型，避免超大浮点值转换成 int32 时出现未定义行为。
  */
-int Com_PID_Balance(float kp, float kd, float kalman_angle, float balance_angle, short gy)
+static int32_t Pid_FloatToClampedInt(float out, int32_t limit)
 {
-    /* 1. 计算角度偏差：当前角度减目标角度。 */
-    float bias_angle = 0.0f;
-    bias_angle = kalman_angle - balance_angle;
-    /* 2. PD 输出：比例项负责扶正，微分项负责阻尼。 */
-    return kp * bias_angle + kd * gy;
+    if (out > (float)limit)
+    {
+        return limit;
+    }
+    if (out < -(float)limit)
+    {
+        return -limit;
+    }
+    return (int32_t)out;
 }
 
-/**
- * @brief 速度环 PI 控制。
- * @param kp 速度环比例系数，影响当前轮速偏差的修正强度。
- * @param ki 速度环积分系数，影响长期位移/速度偏差的修正强度。
- * @param encoder_a A 电机本周期编码器增量。
- * @param encoder_b B 电机本周期编码器增量。
- * @param remove_move 遥控前后运动的控制量，用来人为改变速度环目标。
- * @return 速度环输出 PWM 分量，用于修正小车长期前冲或后退。
- *
- * 平衡车的速度环通常作为直立环的外环或辅助环使用。这里把两个编码器增量相加
- * 得到整体前后速度，再经过低通滤波和积分限幅，避免速度环输出过猛影响直立环。
- */
-int Com_PID_Velocity(float kp, float ki, int encoder_a, int encoder_b,int remove_move)
+int32_t PID_Clamp(int32_t value, int32_t limit)
 {
-    int bias_velocity = 0;
-    static int least_velocity = 0; // 速度积分累计值，用于记录长期速度/位移偏差。
-    static int last_velocity = 0;  // 上一次滤波后的速度偏差，用于一阶低通滤波。
-    /* 1. 计算速度偏差：目标速度为 0，因此直接使用两个轮子的增量和。 */
-    bias_velocity = (encoder_a + encoder_b) - 0;
-
-    /* 2. 对速度偏差做一阶低通滤波，减小编码器抖动对外环的影响。 */
-    /*    本次滤波值 = k * 上次滤波值 + (1 - k) * 本次原始值。 */
-    bias_velocity = 0.8 * last_velocity + 0.2 * bias_velocity;
-    /* 保存本次滤波结果，下一次计算继续使用。 */
-    last_velocity = bias_velocity;
-
-    /* 3. 累加积分项。这里没有显式乘以采样周期，采样周期固定时可通过 ki 统一调节。 */
-    least_velocity += bias_velocity;
-    /* 遥控前后运动通过改变积分累计值，使小车主动向前或向后移动。 */
-    least_velocity -= remove_move;
-
-    /* 4. 积分限幅。所有积分控制都要防止积分饱和，否则会导致小车恢复很慢甚至失控。 */
-    /*    编码器读数是带符号 16 位范围，限幅值统一定义在 Car_Config.h。 */
-    if(least_velocity > CAR_VELOCITY_I_LIMIT)
+    if (value > limit)
     {
-        least_velocity = CAR_VELOCITY_I_LIMIT;
+        return limit;
     }
-    else if(least_velocity < -CAR_VELOCITY_I_LIMIT)
+    if (value < -limit)
     {
-        least_velocity = -CAR_VELOCITY_I_LIMIT;
+        return -limit;
     }
-
-    /* 5. 速度环 PI 输出。 */
-    return kp * bias_velocity + ki * least_velocity;
+    return value;
 }
 
-/**
- * @brief 转向环 P 控制。
- * @param kp 转向环比例系数。
- * @param gz Z 轴陀螺仪角速度原始值，反映车身左右自转速度。
- * @return 转向环输出 PWM 分量，后续以差速形式叠加到左右电机。
- *
- * 当没有遥控转向时，转向环用于抑制车身绕 Z 轴自然旋转；主动遥控转向时，
- * 上层逻辑会跳过该环，避免它抵消人为转向指令。
- */
-int Com_PID_Turn(float kp,short gz)
+void PID_VelocityStateReset(velocity_pid_state_t *st)
 {
-    /* 目标 Z 轴角速度为 0，因此偏差就是当前 gz。 */
-    return kp*(gz-0);
+    st->i_acc = 0;
+    st->lpf_last = 0;
+}
+
+int32_t PID_Balance(const car_params_t *p, float angle, float target_angle, short gy)
+{
+    /* 1. 角度偏差：当前角度减目标角度。 */
+    float bias_angle = angle - target_angle;
+    /* 2. PD 输出：比例项扶正，微分项（角速度原始值）阻尼。 */
+    float out = p->balance_kp * bias_angle + p->balance_kd * (float)gy;
+    return Pid_FloatToClampedInt(out, p->pwm_limit);
+}
+
+int32_t PID_Velocity(velocity_pid_state_t *st, const car_params_t *p,
+                     int encoder_a, int encoder_b, int remote_move)
+{
+    int32_t bias_velocity = 0;
+
+    /* 1. 速度偏差：目标速度为 0，直接使用两轮增量和。 */
+    bias_velocity = (int32_t)(encoder_a + encoder_b);
+
+    /* 2. 一阶低通滤波，减小编码器抖动对外环的影响：
+     *    本次滤波值 = 0.8 * 上次滤波值 + 0.2 * 本次原始值。
+     *    结果截断为整型，与原实现的 int 语义保持一致。 */
+    bias_velocity = (int32_t)(0.8 * (double)st->lpf_last + 0.2 * (double)bias_velocity);
+    st->lpf_last = bias_velocity;
+
+    /* 3. 积分累计。遥控前后目标直接改积分，等效于改变速度目标。 */
+    st->i_acc += bias_velocity;
+    st->i_acc -= (int32_t)remote_move;
+
+    /* 4. 积分限幅：防止积分饱和导致恢复变慢甚至失控。 */
+    if (st->i_acc > p->velocity_i_limit)
+    {
+        st->i_acc = p->velocity_i_limit;
+    }
+    else if (st->i_acc < -p->velocity_i_limit)
+    {
+        st->i_acc = -p->velocity_i_limit;
+    }
+
+    /* 5. 速度环 PI 输出并限幅。周期固定时采样周期可并入 ki 统一调节。 */
+    float out = p->velocity_kp * (float)bias_velocity +
+                p->velocity_ki * (float)st->i_acc;
+    return Pid_FloatToClampedInt(out, p->pwm_limit);
+}
+
+int32_t PID_Turn(const car_params_t *p, short gz)
+{
+    /* 目标 Z 轴角速度为 0，偏差即当前 gz。 */
+    float out = p->turn_kp * (float)gz;
+    return Pid_FloatToClampedInt(out, p->pwm_limit);
 }
