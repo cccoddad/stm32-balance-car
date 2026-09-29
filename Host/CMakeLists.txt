@@ -50,3 +50,27 @@ foreach(t control attitude protocol)
     endif()
     add_test(NAME ${t} COMMAND test_${t})
 endforeach()
+
+# ============================================================
+# SIL 固件在环仿真（Phase 3）：真实 App+Service 代码 × port_sim 倒立摆
+# 与单片机共享同一份 App_Car.c / Service/*.c，只换 Port 实现。
+# ============================================================
+add_executable(sil_sim
+    ${CMAKE_CURRENT_SOURCE_DIR}/sim/main_sil.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/sim/pendulum_model.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../App/App_Car.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Port/port_sim.c
+)
+target_include_directories(sil_sim PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}          # sim/pendulum_model.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Port  # port_sim.h
+)
+target_link_libraries(sil_sim PRIVATE car_service)
+if(NOT WIN32)
+    target_link_libraries(sil_sim PRIVATE m)
+endif()
+
+# E1/E2 作为 CTest 门禁（--check 按验收标准决定退出码）；
+# E3~E5 属实验性产出（CSV/图表），由 tools/plot.py 消费，不设硬门禁。
+add_test(NAME sil_e1 COMMAND sil_sim e1 sim_out --check)
+add_test(NAME sil_e2 COMMAND sil_sim e2 sim_out --check)

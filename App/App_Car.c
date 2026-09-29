@@ -151,6 +151,11 @@ void App_Car_PID(void)
     port_motor_set((int16_t)pwma, (int16_t)pwmb);
 }
 
+float App_Car_GetAttitude(void)
+{
+    return s_kalman.angle;
+}
+
 /**
  * @brief 串口字节回调（中断上下文）：驱动协议状态机，产出指令即处理。
  */

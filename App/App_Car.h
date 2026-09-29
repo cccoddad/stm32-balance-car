@@ -38,4 +38,7 @@ void App_Car_Display(void);
 /* 执行一次平衡车三环控制，并把最终 PWM 输出给电机。 */
 void App_Car_PID(void);
 
+/* 读取卡尔曼滤波后的当前倾角（度）：OLED/串口日志/SIL 仿真的统一取值入口。 */
+float App_Car_GetAttitude(void);
+
 #endif /* __APP_CAR_H */

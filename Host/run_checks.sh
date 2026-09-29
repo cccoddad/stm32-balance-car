@@ -21,7 +21,7 @@ cd "$(dirname "$0")"
 echo "== [1/4] cppcheck 静态分析 =="
 cppcheck --enable=warning,style,performance,portability --inline-suppr \
     --suppress=missingIncludeSystem --std=c99 \
-    ../Service ../App ../Port -q
+    ../Service ../App ../Port sim -q
 cppcheck --enable=warning --inline-suppr --suppress=missingIncludeSystem --std=c99 \
     ../BSP/bsp_adc.c ../BSP/bsp_encoder.c ../BSP/bsp_imu.c ../BSP/bsp_motor.c \
     ../BSP/bsp_uart.c -q
@@ -45,10 +45,12 @@ else
     BDIR=build
 fi
 
-echo "== [3/4] 构建 + ctest（$BDIR）=="
+echo "== [3/4] 构建 + ctest + SIL 实验（$BDIR）=="
 cmake -B "$BDIR" -G Ninja -DCAR_COVERAGE="${CAR_COVERAGE:-OFF}" >/dev/null
 cmake --build "$BDIR" >/dev/null
 ctest --test-dir "$BDIR" --output-on-failure
+# 全量跑 E1~E5（含 --check 验收），数据落 $BDIR/sim_out 供 plot.py 出图
+"./$BDIR/sil_sim" all "$BDIR/sim_out" --check
 
 if [ "${CAR_COVERAGE:-OFF}" = "ON" ]; then
     echo "== [4/4] gcov 覆盖率（Service 层行覆盖）=="
