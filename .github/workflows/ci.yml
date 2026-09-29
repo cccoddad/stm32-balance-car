@@ -1,0 +1,37 @@
+name: CI
+
+# 主机侧质量门禁：与本地 Host/run_checks.sh 完全等价（已在本机验证全绿）。
+# 项目无实物硬件，CI 的职责是保证"可测试性资产"不回退：
+#   静态分析 0 告警 + 114 条单元测试 + 固件在环 SIL 七组实验验收。
+#
+# 关于 ARM 交叉编译 job：构建方案见 docs/（arm-gcc + GCC 版 FreeRTOS 移植 +
+# 链接脚本），但当前开发环境无法获取 arm-none-eabi 工具链（详见方案文档风险表），
+# 未验证的构建不进 CI —— 与其放一个大概率红的 job，不如先让已验证的部分站稳。
+# 固件本体的编译验证由 Keil MDK 双配置（HAL/寄存器）承担：均 0 Error / 0 Warning。
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-checks:
+    name: cppcheck + 单测 + SIL 仿真
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build cppcheck
+
+      - name: 静态分析 + 单元测试 + 固件在环实验
+        run: sh Host/run_checks.sh
+
+      - name: 上传 SIL 实验数据（失败排查用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-out
+          path: Host/build/sim_out/
+          if-no-files-found: ignore
